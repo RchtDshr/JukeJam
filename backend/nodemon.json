@@ -1,0 +1,9 @@
+{
+  "watch": ["./"],
+  "ext": "js,json,env",
+  "ignore": ["node_modules/", "*.log", ".git/", "Dockerfile", "docker-compose.yml", "readme.md"],
+  "delay": "1000",
+  "polling": true,
+  "legacyWatch": true,
+  "verbose": true
+}
