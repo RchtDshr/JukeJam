@@ -62,6 +62,11 @@ async function getRoomByCode(roomCode) {
   return res.rows[0];
 }
 
+async function getRoomById(roomId) {
+  const res = await pool.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+  return res.rows[0];
+}
+
 async function setCurrentSong(roomId, songId) {
   await pool.query('UPDATE rooms SET current_song_id = $1 WHERE id = $2', [songId, roomId]);
   const songRes = await pool.query('SELECT * FROM songs WHERE id = $1', [songId]);
@@ -72,6 +77,7 @@ async function setCurrentSong(roomId, songId) {
 module.exports = {
     createRoom,
     getRooms,
+    getRoomById,
     getRoomByCode,
     setCurrentSong
 }

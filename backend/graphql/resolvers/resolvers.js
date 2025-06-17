@@ -12,6 +12,17 @@ async function getRoomIdByCode(roomCode) {
 }
 
 const resolvers = {
+    // Nested resolvers:
+    Room: {
+        admin_id: (room) => participantService.getParticipantById(room.admin_id),
+        current_song_id: (room) => songService.getSongById(room.current_song_id)
+    },
+
+    Song: {
+        room_id: (song) => roomService.getRoomById(song.room_id),
+        added_by: (song) => participantService.getParticipantById(song.added_by)
+    },
+
     Query: {
         getRooms: () => roomService.getRooms(),
         getRoom: (_, { roomCode }) => roomService.getRoomByCode(roomCode),

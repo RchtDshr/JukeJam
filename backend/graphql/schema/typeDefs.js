@@ -10,15 +10,15 @@ const typeDefs = gql`
   type Room {
     id: ID!
     room_code: String!
-    admin_id: ID!
-    current_song_id: ID
+    admin_id: Participant!
+    current_song_id: Song
     created_at: String!
   }
 
   type Song {
     id: ID!
-    room_id: ID!
-    added_by: ID!
+    room_id: Room!
+    added_by: Participant!
     youtube_url: String!
     title: String!
     added_at: String!

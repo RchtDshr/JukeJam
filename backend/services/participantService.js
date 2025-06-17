@@ -3,8 +3,9 @@ const { v4: uuidv4 } = require('uuid');
 const { getRoomByCode } = require('./roomService.js');
 const pubsub = require('../graphql/pubsub/pubsub.js');
 
+
 async function joinRoom(roomCode, name) {
-  const client = await pool.connect();
+    const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -26,21 +27,25 @@ async function joinRoom(roomCode, name) {
 
     // Add to room_members
     await client.query(
-      'INSERT INTO room_members (participant_id, room_id, role) VALUES ($1, $2, $3)',
-      [participant.id, roomId, 'member']
+        'INSERT INTO room_members (participant_id, room_id, role) VALUES ($1, $2, $3)',
+        [participant.id, roomId, 'member']
     );
     pubsub.publish('PARTICIPANT_JOINED', { participantJoined: participant });
     await client.query('COMMIT');
     return participant;
-  } catch (error) {
+} catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+      client.release();
   }
 }
 
 
+async function getParticipantById(participantId) {
+    const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
+    return result.rows[0];
+}
 async function kickParticipant(roomId, participantId) {
   await pool.query(
     'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',
@@ -71,5 +76,6 @@ module.exports = {
     joinRoom,
     kickParticipant,
     getParticipants,
+    getParticipantById,
     notifyParticipantsUpdated
 }
