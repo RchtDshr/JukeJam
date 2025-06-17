@@ -27,23 +27,23 @@ const typeDefs = gql`
   type Query {
     getRooms: [Room]
     getRoom(roomCode: String!): Room
-    getParticipants(roomId: ID!): [Participant]
-    getSongQueue(roomId: ID!): [Song]
+    getParticipants(roomCode: ID!): [Participant]
+    getSongQueue(roomCode: ID!): [Song]
   }
 
   type Mutation {
     createRoom(adminName: String!): Room
     joinRoom(roomCode: String!, name: String!): Participant
-    addSong(roomId: ID!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
-    kickParticipant(roomId: ID!, participantId: ID!): Boolean
-    setCurrentSong(roomId: ID!, songId: ID!): Boolean
+    addSong(roomCode: ID!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
+    kickParticipant(roomCode: ID!, participantId: ID!): Boolean
+    setCurrentSong(roomCode: ID!, songId: ID!): Boolean
   }
 
   type Subscription {
-    songQueueUpdated(roomId: ID!): [Song]
-    participantJoined(roomId: ID!): [Participant]
-    participantsUpdated(roomId: ID!): [Participant]
-    currentSongChanged(roomId: ID!): Song
+    songQueueUpdated(roomCode: ID!): [Song]
+    participantJoined(roomCode: ID!): [Participant]
+    participantsUpdated(roomCode: ID!): [Participant]
+    currentSongChanged(roomCode: ID!): Song
   }
 `;
 module.exports = typeDefs;
