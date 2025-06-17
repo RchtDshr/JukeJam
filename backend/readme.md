@@ -3,6 +3,15 @@
 # PostgreSQL Access:
 docker exec -it pg_jukejam psql -U postgres -d jukejam
 
+to get inside container 
+docker exec -it pg_jukejam bash
+for pg 
+psql -U postgres
+
+\l -- to list database
+\c jukejam -- to connect to jukejam db
+\dt      -- list all tables
+\d rooms -- describe rooms table
 
 # Node.js Access:
 Your Node.js app is running on port 3000
@@ -35,3 +44,9 @@ Connection: localhost:6379 (no password needed)
 #  Rebuild with fixes (do this when install new pkg or change in package.json file)
 docker-compose down
 docker-compose up --build
+
+
+
+
+# Future work
+Use Prisma ORM

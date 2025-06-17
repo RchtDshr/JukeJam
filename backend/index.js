@@ -7,13 +7,6 @@ async function testConnections() {
     console.log('🚀 Starting JukeJam Backend...');
     // Add this line anywhere
     console.log('🔥 Hot reload test - version 4!');
-    console.log('Environment:', {
-      PG_HOST: process.env.PG_HOST,
-      PG_DB: process.env.PG_DB,
-      PG_USER: process.env.PG_USER,
-      PG_PORT: process.env.PG_PORT,
-      REDIS_URL: process.env.REDIS_URL
-    });
 
     // Test Redis connection
     await redis.set('project', 'collab-music');
