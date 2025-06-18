@@ -15,7 +15,8 @@ const resolvers = {
     // Nested resolvers:
     Room: {
         admin_id: (room) => participantService.getParticipantById(room.admin_id),
-        current_song_id: (room) => songService.getSongById(room.current_song_id)
+        current_song_id: (room) => songService.getSongById(room.current_song_id),
+        members: async (room) => participantService.getParticipants(room.id)
     },
 
     Song: {

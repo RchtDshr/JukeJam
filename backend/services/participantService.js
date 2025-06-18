@@ -40,11 +40,11 @@ async function joinRoom(roomCode, name) {
   }
 }
 
-
 async function getParticipantById(participantId) {
     const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
     return result.rows[0];
 }
+
 async function kickParticipant(roomId, participantId) {
   await pool.query(
     'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',

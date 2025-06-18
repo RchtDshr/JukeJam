@@ -11,6 +11,7 @@ const typeDefs = gql`
     id: ID!
     room_code: String!
     admin_id: Participant!
+    members: [Participant!]!
     current_song_id: Song
     created_at: String!
   }
