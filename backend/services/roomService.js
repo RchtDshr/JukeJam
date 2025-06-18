@@ -1,6 +1,6 @@
 const pool = require('../db/postgres.js');
-const { v4: uuidv4 } = require('uuid');
 const pubsub = require('../graphql/pubsub/pubsub.js');
+const { nanoid } = require('nanoid');
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -15,7 +15,7 @@ async function createRoom(adminName) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const adminId = uuidv4();
+    const adminId = nanoid(10);
     await client.query(
       'INSERT INTO participants (id, name) VALUES ($1, $2)',
       [adminId, adminName]
@@ -28,7 +28,7 @@ async function createRoom(adminName) {
       if (res.rowCount === 0) break;
     }
 
-    const roomId = uuidv4();
+    const roomId = nanoid(10);
     await client.query(
       'INSERT INTO rooms (id, room_code, admin_id) VALUES ($1, $2, $3)',
       [roomId, roomCode, adminId]

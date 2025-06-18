@@ -1,6 +1,5 @@
 const pool = require('../db/postgres.js');
-const { v4: uuidv4 } = require('uuid');
-const { getRoomByCode } = require('./roomService.js');
+const { nanoid } = require('nanoid');
 const pubsub = require('../graphql/pubsub/pubsub.js');
 
 
@@ -18,7 +17,7 @@ async function joinRoom(roomCode, name) {
     const roomId = roomResult.rows[0].id;
 
     // Create new participant
-    const participantId = uuidv4();
+    const participantId = nanoid(10);
     const participantResult = await client.query(
       'INSERT INTO participants (id, name) VALUES ($1, $2) RETURNING id, name, created_at',
       [participantId, name]
