@@ -31,6 +31,8 @@ services:
       PG_PASSWORD: password
       PG_DB: jukejam
       PG_PORT: 5432
+      REDIS_HOST: redis-stack
+      REDIS_PORT: 6379
       REDIS_URL: redis://redis-stack:6379
       CHOKIDAR_USEPOLLING: true          # Add this
       WATCHPACK_POLLING: true 

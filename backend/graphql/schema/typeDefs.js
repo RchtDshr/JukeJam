@@ -48,7 +48,7 @@ const typeDefs = gql`
 
   type Subscription {
     songQueueUpdated(roomCode: ID!): [Song]
-    participantJoined(roomCode: ID!): [Participant]
+    participantJoined(roomCode: ID!): Participant
     participantsUpdated(roomCode: ID!): [Participant]
     currentSongChanged(roomCode: ID!): Song
   }
