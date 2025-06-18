@@ -32,9 +32,15 @@ const typeDefs = gql`
     getSongQueue(roomCode: ID!): [Song]
   }
 
+  type LeaveRoomResponse {
+  success: Boolean!
+  message: String!
+  }
+
   type Mutation {
     createRoom(adminName: String!): Room
     joinRoom(roomCode: String!, name: String!): Participant
+    leaveRoom(roomCode: ID!, participantId: ID!): LeaveRoomResponse!
     addSong(roomCode: ID!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
     kickParticipant(roomCode: ID!, participantId: ID!): Boolean
     setCurrentSong(roomCode: ID!, songId: ID!): Boolean

@@ -1,10 +1,9 @@
 const pool = require('../db/postgres.js');
 const pubsub = require('../graphql/pubsub/pubsub.js');
-const { nanoid } = require('nanoid');
-
+const { v4: uuidv4 } = require('uuid');
 
 async function addSong(roomId, addedBy, youtubeUrl, title) {
-  const songId = nanoid(10);
+  const songId = uuidv4();
 
   // Insert the song into song_queue table
   await pool.query(

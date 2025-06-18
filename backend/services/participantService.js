@@ -1,10 +1,10 @@
 const pool = require('../db/postgres.js');
-const { nanoid } = require('nanoid');
+const { v4: uuidv4 } = require('uuid');
 const pubsub = require('../graphql/pubsub/pubsub.js');
 
 
 async function joinRoom(roomCode, name) {
-    const client = await pool.connect();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -17,7 +17,7 @@ async function joinRoom(roomCode, name) {
     const roomId = roomResult.rows[0].id;
 
     // Create new participant
-    const participantId = nanoid(10);
+    const participantId = uuidv4();
     const participantResult = await client.query(
       'INSERT INTO participants (id, name) VALUES ($1, $2) RETURNING id, name, created_at',
       [participantId, name]
@@ -26,23 +26,78 @@ async function joinRoom(roomCode, name) {
 
     // Add to room_members
     await client.query(
-        'INSERT INTO room_members (participant_id, room_id, role) VALUES ($1, $2, $3)',
-        [participant.id, roomId, 'member']
+      'INSERT INTO room_members (participant_id, room_id, role) VALUES ($1, $2, $3)',
+      [participant.id, roomId, 'member']
     );
     pubsub.publish('PARTICIPANT_JOINED', { participantJoined: participant });
     await client.query('COMMIT');
     return participant;
-} catch (error) {
+  } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
-      client.release();
+    client.release();
+  }
+}
+
+async function leaveRoom(roomId, participantId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 1️⃣ Check if room exists
+    const roomRes = await client.query('SELECT id FROM rooms WHERE id = $1', [roomId]);
+    console.log("leaveRoom roomRes:", roomRes.rows.length);
+    if (roomRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { success: false, message: "Room not found" };
+    }
+
+    // 2️⃣ Check if participant is in room
+    const memberRes = await client.query(
+      'SELECT participant_id FROM room_members WHERE room_id = $1 AND participant_id = $2',
+      [roomId, participantId]
+    );
+    if (memberRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { success: false, message: "Participant not in room" };
+    }
+
+    // 3️⃣ Delete the participant from room
+    await client.query(
+      'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',
+      [roomId, participantId]
+    );
+
+    // 4️⃣ Check if room is now empty
+    const countRes = await client.query(
+      'SELECT COUNT(*) FROM room_members WHERE room_id = $1',
+      [roomId]
+    );
+    const remainingCount = parseInt(countRes.rows[0].count);
+
+    if (remainingCount === 0) {
+      // Delete all songs in the room
+      await client.query('DELETE FROM song_queue WHERE room_id = $1', [roomId]);
+
+      // Delete the room itself
+      await client.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+    }
+
+    await client.query('COMMIT');
+    return { success: true, message: "Participant left successfully" };
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error("Transaction error:", err);
+    return { success: false, message: "An error occurred" };
+  } finally {
+    client.release();
   }
 }
 
 async function getParticipantById(participantId) {
-    const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
-    return result.rows[0];
+  const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
+  return result.rows[0];
 }
 
 async function kickParticipant(roomId, participantId) {
@@ -72,9 +127,10 @@ async function notifyParticipantsUpdated(roomId) {
 }
 
 module.exports = {
-    joinRoom,
-    kickParticipant,
-    getParticipants,
-    getParticipantById,
-    notifyParticipantsUpdated
+  joinRoom,
+  leaveRoom,
+  kickParticipant,
+  getParticipants,
+  getParticipantById,
+  notifyParticipantsUpdated
 }
