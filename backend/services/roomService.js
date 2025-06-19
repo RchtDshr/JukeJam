@@ -52,7 +52,7 @@ async function createRoom(adminName) {
 
 async function getRooms() {
   const res = await pool.query('SELECT * FROM rooms');
-//   console.log('getRooms res:', res.rows);
+  // console.log('getRooms res:', res.rows);
   return res.rows;
 }
 

@@ -48,6 +48,8 @@ docker exec -it react_jukejam bash
 docker-compose down
 docker-compose up --build
 
+# Start any specific container
+docker-compose restart frontend   
 
 # Future work
 Use Prisma ORM
