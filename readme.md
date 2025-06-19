@@ -41,11 +41,12 @@ Open in browser: http://localhost:8001
 Method 4: Using any Redis GUI client
 Connection: localhost:6379 (no password needed)
 
+# Frontend React Access
+docker exec -it react_jukejam bash
+
 #  Rebuild with fixes (do this when install new pkg or change in package.json file)
 docker-compose down
 docker-compose up --build
-
-
 
 
 # Future work
