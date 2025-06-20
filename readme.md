@@ -29,16 +29,14 @@ docker exec -it node_jukejam bash
 
 
 # Redis Access:
-Method 1: Redis CLI (if you have Redis installed locally)
-redis-cli -h localhost -p 6379
 
-Method 2: Using Docker exec
+Using Docker exec
 docker exec -it redis_stack_jukejam redis-cli
 
-Method 3: Redis GUI (Redis Stack includes a web UI)
+Redis GUI (Redis Stack includes a web UI)
 Open in browser: http://localhost:8001
 
-Method 4: Using any Redis GUI client
+Using any Redis GUI client
 Connection: localhost:6379 (no password needed)
 
 # Frontend React Access

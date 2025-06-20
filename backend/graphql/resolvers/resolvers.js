@@ -2,6 +2,7 @@ const roomService = require('../../services/roomService.js');
 const participantService = require('../../services/participantService.js');
 const songService = require('../../services/songService.js');
 const pubsub = require('../pubsub/pubsub.js');
+const { withFilter } = require('graphql-subscriptions');
 
 async function getRoomIdByCode(roomCode) {
     const room = await roomService.getRoomByCode(roomCode);
@@ -38,11 +39,11 @@ const resolvers = {
     },
     Mutation: {
         createRoom: (_, { adminName }) => roomService.createRoom(adminName),
-        joinRoom: (_, { roomCode, name }) => participantService.joinRoom(roomCode, name), 
+        joinRoom: (_, { roomCode, name }) => participantService.joinRoom(roomCode, name),
         leaveRoom: async (_, { roomCode, participantId }) => {
             const roomId = await getRoomIdByCode(roomCode);
             return participantService.leaveRoom(roomId, participantId);
-        }, 
+        },
         kickParticipant: async (_, { roomCode, participantId }) => {
             const roomId = await getRoomIdByCode(roomCode);
             return participantService.kickParticipant(roomId, participantId);
@@ -57,27 +58,39 @@ const resolvers = {
         },
     },
     Subscription: {
-        songQueueUpdated: {
-            subscribe: async (_, { roomCode }) => {
-                // You can similarly resolve roomId here if needed for Redis later
-                return pubsub.asyncIterator('SONG_QUEUE_UPDATED');
-            },
-        },
-        participantJoined: {
-            subscribe: async (_, { roomCode }) => {
-                return pubsub.asyncIterator('PARTICIPANT_JOINED');
-            },
-        },
-        participantsUpdated: {
-            subscribe: async (_, { roomCode }) => {
-                return pubsub.asyncIterator('PARTICIPANTS_UPDATED');
-            },
-        },
-        currentSongChanged: {
-            subscribe: async (_, { roomCode }) => {
-                return pubsub.asyncIterator('CURRENT_SONG_CHANGED');
-            },
-        }
+         songQueueUpdated: {
+        subscribe: withFilter(
+            () => pubsub.asyncIterator('SONG_QUEUE_UPDATED'),
+            (payload, variables) => {
+                return payload.songQueueUpdated.roomCode === variables.roomCode;
+            }
+        ),
+    },
+    participantJoined: {
+        subscribe: withFilter(
+            () => pubsub.asyncIterator('PARTICIPANT_JOINED'),
+            (payload, variables) => {
+                console.log('Filtering participant joined:', payload.participantJoined.roomCode, 'vs', variables.roomCode);
+                return payload.participantJoined.roomCode === variables.roomCode;
+            }
+        ),
+    },
+    participantsUpdated: {
+        subscribe: withFilter(
+            () => pubsub.asyncIterator('PARTICIPANTS_UPDATED'),
+            (payload, variables) => {
+                return payload.participantsUpdated.roomCode === variables.roomCode;
+            }
+        ),
+    },
+    currentSongChanged: {
+        subscribe: withFilter(
+            () => pubsub.asyncIterator('CURRENT_SONG_CHANGED'),
+            (payload, variables) => {
+                return payload.currentSongChanged.roomCode === variables.roomCode;
+            }
+        ),
+    }
     }
 };
 
