@@ -18,5 +18,15 @@ export const JOIN_ROOM = gql`
 mutation JoinRoom($roomCode: String!, $name: String!) {
   joinRoom(roomCode: $roomCode, name: $name) {
     name
+    id
   }
 }`
+
+export const LEAVE_ROOM = gql`
+  mutation LeaveRoom($roomCode: String!, $participantId: ID!) {
+    leaveRoom(roomCode: $roomCode, participantId: $participantId) {
+      id
+      name
+    }
+  }
+`;

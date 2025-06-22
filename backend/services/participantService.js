@@ -61,31 +61,36 @@ async function leaveRoom(roomId, participantId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // 1️⃣ Check if room exists
-    const roomRes = await client.query('SELECT id FROM rooms WHERE id = $1', [roomId]);
-    console.log("leaveRoom roomRes:", roomRes.rows.length);
-    if (roomRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { success: false, message: "Room not found" };
-    }
 
-    // 2️⃣ Check if participant is in room
+    // 2️⃣ Get participant details before deleting
+    const participantRes = await client.query(
+      'SELECT id, name FROM participants WHERE id = $1',
+      [participantId]
+    );
+    if (participantRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error("Participant not found");
+    }
+    const participant = participantRes.rows[0];
+
+    // 3️⃣ Get role before deleting
     const memberRes = await client.query(
-      'SELECT participant_id FROM room_members WHERE room_id = $1 AND participant_id = $2',
+      'SELECT role FROM room_members WHERE room_id = $1 AND participant_id = $2',
       [roomId, participantId]
     );
     if (memberRes.rows.length === 0) {
       await client.query('ROLLBACK');
-      return { success: false, message: "Participant not in room" };
+      throw new Error("Participant not in room");
     }
+    const wasAdmin = memberRes.rows[0].role === 'admin';
 
-    // 3️⃣ Delete the participant from room
+    // 4️⃣ Delete participant from room
     await client.query(
       'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',
       [roomId, participantId]
     );
 
-    // 4️⃣ Check if room is now empty
+    // 5️⃣ Check if room is now empty
     const countRes = await client.query(
       'SELECT COUNT(*) FROM room_members WHERE room_id = $1',
       [roomId]
@@ -93,24 +98,50 @@ async function leaveRoom(roomId, participantId) {
     const remainingCount = parseInt(countRes.rows[0].count);
 
     if (remainingCount === 0) {
-      // Delete all songs in the room
+      // Room is empty: cleanup
       await client.query('DELETE FROM song_queue WHERE room_id = $1', [roomId]);
-
-      // Delete the room itself
       await client.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+    } else if (wasAdmin) {
+      // Admin left: reassign admin
+      const newAdminRes = await client.query(
+        'SELECT participant_id FROM room_members WHERE room_id = $1 LIMIT 1',
+        [roomId]
+      );
+      const newAdminId = newAdminRes.rows[0].participant_id;
+
+      await client.query(
+        'UPDATE room_members SET role = $1 WHERE participant_id = $2',
+        ['admin', newAdminId]
+      );
+
+      await client.query(
+        'UPDATE rooms SET admin_id = $1 WHERE id = $2',
+        [newAdminId, roomId]
+      );
     }
 
+    // ✅ Publish participantLeft event
+    pubsub.publish('PARTICIPANT_LEFT', {
+      participantLeft: {
+        id: participant.id,
+        name: participant.name
+      }
+    });
+
     await client.query('COMMIT');
-    return { success: true, message: "Participant left successfully" };
+
+    // 🔥 Now directly return the participant who left
+    return participant
 
   } catch (err) {
     await client.query('ROLLBACK');
     console.error("Transaction error:", err);
-    return { success: false, message: "An error occurred" };
+    throw new Error("Failed to leave room");
   } finally {
     client.release();
   }
 }
+
 
 async function getParticipantById(participantId) {
   const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);

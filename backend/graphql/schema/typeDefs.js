@@ -40,7 +40,7 @@ const typeDefs = gql`
   type Mutation {
     createRoom(adminName: String!): Room
     joinRoom(roomCode: String!, name: String!): Participant
-    leaveRoom(roomCode: String!, participantId: ID!): LeaveRoomResponse!
+    leaveRoom(roomCode: String!, participantId: ID!): Participant
     addSong(roomCode: String!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
     kickParticipant(roomCode: String!, participantId: ID!): Boolean
     setCurrentSong(roomCode: String!, songId: ID!): Boolean
@@ -49,6 +49,7 @@ const typeDefs = gql`
   type Subscription {
     songQueueUpdated(roomCode: String!): [Song]
     participantJoined(roomCode: String!): Participant
+    participantLeft(roomCode: String!): Participant
     participantsUpdated(roomCode: String!): [Participant]
     currentSongChanged(roomCode: String!): Song
   }

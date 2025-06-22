@@ -15,7 +15,9 @@ const handleJoinRoom = async (roomCode) => {
       const { data } = await joinRoom({
         variables: { roomCode, name },
       });
-      
+      const participantId = data.joinRoom.id;
+      localStorage.setItem("participantId", participantId);
+
       console.log('Joined Room as: ', data.joinRoom);
       // You can also store participantId if you want later for advanced features
       navigate(`/room/${roomCode}`);

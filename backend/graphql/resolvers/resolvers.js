@@ -58,39 +58,48 @@ const resolvers = {
         },
     },
     Subscription: {
-         songQueueUpdated: {
-        subscribe: withFilter(
-            () => pubsub.asyncIterator('SONG_QUEUE_UPDATED'),
-            (payload, variables) => {
-                return payload.songQueueUpdated.roomCode === variables.roomCode;
-            }
-        ),
-    },
-    participantJoined: {
-        subscribe: withFilter(
-            () => pubsub.asyncIterator('PARTICIPANT_JOINED'),
-            (payload, variables) => {
-                console.log('Filtering participant joined:', payload.participantJoined.roomCode, 'vs', variables.roomCode);
-                return payload.participantJoined.roomCode === variables.roomCode;
-            }
-        ),
-    },
-    participantsUpdated: {
-        subscribe: withFilter(
-            () => pubsub.asyncIterator('PARTICIPANTS_UPDATED'),
-            (payload, variables) => {
-                return payload.participantsUpdated.roomCode === variables.roomCode;
-            }
-        ),
-    },
-    currentSongChanged: {
-        subscribe: withFilter(
-            () => pubsub.asyncIterator('CURRENT_SONG_CHANGED'),
-            (payload, variables) => {
-                return payload.currentSongChanged.roomCode === variables.roomCode;
-            }
-        ),
-    }
+        songQueueUpdated: {
+            subscribe: withFilter(
+                () => pubsub.asyncIterator('SONG_QUEUE_UPDATED'),
+                (payload, variables) => {
+                    return payload.songQueueUpdated.roomCode === variables.roomCode;
+                }
+            ),
+        },
+        participantJoined: {
+            subscribe: withFilter(
+                () => pubsub.asyncIterator('PARTICIPANT_JOINED'),
+                (payload, variables) => {
+                    console.log('Filtering participant joined:', payload.participantJoined.roomCode, 'vs', variables.roomCode);
+                    return payload.participantJoined.roomCode === variables.roomCode;
+                }
+            ),
+        },
+        participantLeft: {
+            subscribe: withFilter(
+                () => pubsub.asyncIterator('PARTICIPANT_LEFT'),
+                (payload, variables) => {
+                    console.log('Filtering participant left:', payload.participantLeft.roomCode, 'vs', variables.roomCode);
+                    return payload.participantLeft.roomCode === variables.roomCode;
+                }
+            ),
+        },
+        participantsUpdated: {
+            subscribe: withFilter(
+                () => pubsub.asyncIterator('PARTICIPANTS_UPDATED'),
+                (payload, variables) => {
+                    return payload.participantsUpdated.roomCode === variables.roomCode;
+                }
+            ),
+        },
+        currentSongChanged: {
+            subscribe: withFilter(
+                () => pubsub.asyncIterator('CURRENT_SONG_CHANGED'),
+                (payload, variables) => {
+                    return payload.currentSongChanged.roomCode === variables.roomCode;
+                }
+            ),
+        }
     }
 };
 
