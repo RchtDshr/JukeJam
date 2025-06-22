@@ -22,6 +22,7 @@ export default function RoomPage() {
       const leftParticipant = response.data.leaveRoom;
       console.log(`${leftParticipant.name} has left the room`);
       localStorage.removeItem("participantId"); 
+      localStorage.removeItem("roomCode"); 
       // navigate away after successful leave
       navigate("/");
     } catch (error) {
