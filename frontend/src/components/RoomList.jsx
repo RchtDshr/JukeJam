@@ -7,7 +7,15 @@ export default function RoomList({ rooms }) {
   const navigate = useNavigate();
   const [joinRoom] = useMutation(JOIN_ROOM);
 
-const handleJoinRoom = async (roomCode) => {
+  const handleJoinRoom = async (roomCode) => {
+    const storedRoomCode = localStorage.getItem("roomCode");
+
+    if (storedRoomCode === roomCode) {
+      console.log("Already a participant of this room. Navigating directly...");
+      navigate(`/room/${roomCode}`);
+      return;
+    }
+
     const name = prompt('Enter your name to join this room:');
     if (!name) return;
 
@@ -17,9 +25,9 @@ const handleJoinRoom = async (roomCode) => {
       });
       const participantId = data.joinRoom.id;
       localStorage.setItem("participantId", participantId);
+      localStorage.setItem("roomCode", roomCode);
 
       console.log('Joined Room as: ', data.joinRoom);
-      // You can also store participantId if you want later for advanced features
       navigate(`/room/${roomCode}`);
     } catch (error) {
       console.error('Error joining room:', error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useSubscription, useMutation } from "@apollo/client";
 import { GET_ROOM } from "../graphql/queries";
@@ -13,26 +13,52 @@ export default function RoomPage() {
   });
   const [leaveRoomMutation] = useMutation(LEAVE_ROOM);
 
+  const participantId = localStorage.getItem("participantId");
+
   const handleLeaveRoom = async () => {
-    const participantId = localStorage.getItem("participantId");
+    if (!participantId) return;
     try {
-      const response = await leaveRoomMutation({
+      await leaveRoomMutation({
         variables: { roomCode, participantId },
       });
-      const leftParticipant = response.data.leaveRoom;
-      console.log(`${leftParticipant.name} has left the room`);
-      localStorage.removeItem("participantId"); 
-      localStorage.removeItem("roomCode"); 
-      // navigate away after successful leave
+      console.log(`Participant ${participantId} has left the room`);
+      localStorage.removeItem("participantId");
+      localStorage.removeItem("roomCode");
       navigate("/");
     } catch (error) {
       console.error("Error leaving room:", error.message);
     }
   };
 
-  console.log("Subscribing with roomCode:", roomCode);
+  // Handle browser unload (refresh, tab close)
+  useEffect(() => {
+    const handleBeforeUnload = async (e) => {
+      e.preventDefault();
+      await handleLeaveRoom();
+      navigate("/");
+    };
 
-  // Listen to subscription with error handling
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [roomCode, participantId]);
+
+  // Handle browser back button (important)
+  useEffect(() => {
+    const handlePopState = async () => {
+      await handleLeaveRoom();
+      navigate("/");
+
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [participantId, roomCode]);
+
   const {
     data: subscriptionData,
     loading: subscriptionLoading,
@@ -47,29 +73,10 @@ export default function RoomPage() {
     },
   });
 
-  // Debug subscription state
-  useEffect(() => {
-    console.log("Subscription loading:", subscriptionLoading);
-    console.log("Subscription error:", subscriptionError);
-    console.log("Subscription data:", subscriptionData);
-  }, [subscriptionLoading, subscriptionError, subscriptionData]);
-
-  // Whenever subscription fires, show notification
   useEffect(() => {
     if (subscriptionData?.participantJoined) {
       const newParticipant = subscriptionData.participantJoined;
-      console.log("New participant joined:", newParticipant);
-
-      // Optional: Avoid showing notification for the current user
-      // if (currentUserRef.current && newParticipant.id === currentUserRef.current.id) {
-      //   return;
-      // }
-
-      // Show notification
       alert(`${newParticipant.name} joined the room!`);
-
-      // Alternative: Use a toast library like react-hot-toast
-      // toast.success(`${newParticipant.name} joined the room!`);
     }
   }, [subscriptionData]);
 
@@ -83,11 +90,8 @@ export default function RoomPage() {
       <h1 className="text-3xl font-bold text-green-500 mb-4">
         {room.admin_id.name}'s Room
       </h1>
-      <p>
-        Room Code: <span className="font-mono">{room.room_code}</span>
-      </p>
+      <p>Room Code: <span className="font-mono">{room.room_code}</span></p>
 
-      {/* Debug subscription status */}
       <div className="mt-4 p-2 bg-gray-800 rounded text-sm">
         <p>Subscription Status:</p>
         <p>Loading: {subscriptionLoading ? "Yes" : "No"}</p>
@@ -103,11 +107,11 @@ export default function RoomPage() {
           ))}
         </ul>
       </div>
+
       <button
-        className="bg-green-800 p-2 text-white text-xl font-semibold "
+        className="bg-green-800 p-2 text-white text-xl font-semibold"
         onClick={handleLeaveRoom}
       >
-        {" "}
         Leave Room
       </button>
     </div>
