@@ -5,7 +5,7 @@ export default function CreateRoomModal({ onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!adminName.trim()) return alert('Please enter your name');
+    if (!adminName.trim()) return;
     onCreate(adminName);
     setAdminName('');
   };
@@ -14,15 +14,12 @@ export default function CreateRoomModal({ onCreate }) {
     <form onSubmit={handleSubmit} className="flex items-center gap-4">
       <input
         type="text"
-        className="p-3 rounded-xl text-white w-64 shadow-2xl bg-green-600"
+        className="p-3 rounded-lg w-64 bg-[#1c1c1c] text-white shadow-lg border border-green-500"
         placeholder="Enter your name"
         value={adminName}
         onChange={(e) => setAdminName(e.target.value)}
       />
-      <button
-        type="submit"
-        className="bg-green-600 px-6 py-3 rounded-xl font-semibold hover:bg-green-800"
-      >
+      <button type="submit" className="bg-green-400 px-6 py-3 rounded-lg font-semibold hover:bg-green-300 text-black">
         Create Room
       </button>
     </form>

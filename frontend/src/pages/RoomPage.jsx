@@ -4,81 +4,35 @@ import { useQuery, useSubscription, useMutation } from "@apollo/client";
 import { GET_ROOM } from "../graphql/queries";
 import { PARTICIPANT_JOINED } from "../graphql/subscriptions";
 import { LEAVE_ROOM } from "../graphql/mutations";
+import { toast, Toaster } from "react-hot-toast";
 
 export default function RoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const { loading, error, data } = useQuery(GET_ROOM, {
-    variables: { roomCode },
-  });
-  const [leaveRoomMutation] = useMutation(LEAVE_ROOM);
-
+  const { loading, error, data } = useQuery(GET_ROOM, { variables: { roomCode } });
+  const [leaveRoom] = useMutation(LEAVE_ROOM);
   const participantId = localStorage.getItem("participantId");
 
-  const handleLeaveRoom = async () => {
-    if (!participantId) return;
+  const handleLeave = async () => {
     try {
-      await leaveRoomMutation({
-        variables: { roomCode, participantId },
-      });
-      console.log(`Participant ${participantId} has left the room`);
+      await leaveRoom({ variables: { roomCode, participantId } });
       localStorage.removeItem("participantId");
       localStorage.removeItem("roomCode");
+      toast.success("Left room");
       navigate("/");
-    } catch (error) {
-      console.error("Error leaving room:", error.message);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error leaving room");
     }
   };
 
-  // Handle browser unload (refresh, tab close)
-  useEffect(() => {
-    const handleBeforeUnload = async (e) => {
-      e.preventDefault();
-      await handleLeaveRoom();
-      navigate("/");
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [roomCode, participantId]);
-
-  // Handle browser back button (important)
-  useEffect(() => {
-    const handlePopState = async () => {
-      await handleLeaveRoom();
-      navigate("/");
-
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [participantId, roomCode]);
-
-  const {
-    data: subscriptionData,
-    loading: subscriptionLoading,
-    error: subscriptionError,
-  } = useSubscription(PARTICIPANT_JOINED, {
+  useSubscription(PARTICIPANT_JOINED, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
-      console.log("Received subscription data:", subscriptionData);
-    },
-    onError: (error) => {
-      console.error("Subscription error:", error);
-    },
-  });
-
-  useEffect(() => {
-    if (subscriptionData?.participantJoined) {
-      const newParticipant = subscriptionData.participantJoined;
-      alert(`${newParticipant.name} joined the room!`);
+      const newParticipant = subscriptionData.data.participantJoined;
+      toast.success(`${newParticipant.name} joined!`);
     }
-  }, [subscriptionData]);
+  });
 
   if (loading) return <p className="text-white">Loading room...</p>;
   if (error) return <p className="text-red-500">Error: {error.message}</p>;
@@ -86,34 +40,36 @@ export default function RoomPage() {
   const room = data.getRoom;
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <h1 className="text-3xl font-bold text-green-500 mb-4">
-        {room.admin_id.name}'s Room
-      </h1>
-      <p>Room Code: <span className="font-mono">{room.room_code}</span></p>
-
-      <div className="mt-4 p-2 bg-gray-800 rounded text-sm">
-        <p>Subscription Status:</p>
-        <p>Loading: {subscriptionLoading ? "Yes" : "No"}</p>
-        <p>Error: {subscriptionError ? subscriptionError.message : "None"}</p>
-        <p>Data: {subscriptionData ? "Receiving" : "Waiting"}</p>
+    <div className="min-h-screen bg-[#121212] text-white flex flex-col">
+      <Toaster />
+      <div className="p-6 flex justify-between items-center border-b border-green-600">
+        <div>
+          <h1 className="text-3xl font-bold text-green-400">{room.admin_id.name}'s Room</h1>
+          <p>Code: <span className="font-mono text-green-300">{room.room_code}</span></p>
+        </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">Participants</h2>
-        <ul className="list-disc list-inside">
-          {room.members.map((member) => (
-            <li key={member.id}>{member.name}</li>
-          ))}
-        </ul>
+      <div className="flex flex-1">
+        <div className="flex-1"></div> {/* Left side kept empty */}
+
+        <div className="w-80 bg-[#1e1e1e] p-6 border-l border-green-700">
+          <h2 className="text-xl font-bold mb-4 text-green-400">Participants</h2>
+          <ul className="space-y-2">
+            {room.members.map(member => (
+              <li key={member.id} className="text-white">{member.name}</li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <button
-        className="bg-green-800 p-2 text-white text-xl font-semibold"
-        onClick={handleLeaveRoom}
-      >
-        Leave Room
-      </button>
+      <div className="p-6">
+        <button 
+          onClick={handleLeave} 
+          className="bg-red-600 px-6 py-3 rounded-lg font-bold hover:bg-red-700"
+        >
+          Leave Room
+        </button>
+      </div>
     </div>
   );
 }
