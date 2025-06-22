@@ -1,32 +1,46 @@
-import React from 'react';
-import { useQuery, useMutation } from '@apollo/client';
-import { useNavigate } from "react-router-dom";
-import { GET_ROOMS } from '../graphql/queries';
-import { CREATE_ROOM } from '../graphql/mutations';
-import RoomList from '../components/RoomList';
-import CreateRoomModal from '../components/CreateRoomModal';
-import { Toaster, toast } from 'react-hot-toast';
-import { FaMusic } from 'react-icons/fa';
+import React, { useEffect } from "react";
+import { useQuery, useMutation } from "@apollo/client";
+import { useLocation, useNavigate } from "react-router-dom";
+import { GET_ROOMS } from "../graphql/queries";
+import { CREATE_ROOM } from "../graphql/mutations";
+import RoomList from "../components/RoomList";
+import CreateRoomModal from "../components/CreateRoomModal";
+import { Toaster, toast } from "react-hot-toast";
+import { FaMusic } from "react-icons/fa";
 
 export default function HomePage() {
-  const { loading, error, data } = useQuery(GET_ROOMS);
+  const { loading, error, data, refetch } = useQuery(GET_ROOMS);
   const [createRoom] = useMutation(CREATE_ROOM);
   const navigate = useNavigate();
 
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.refreshRooms) {
+      refetch();
+    }
+  }, [location, refetch]);
   const handleCreateRoom = async (adminName) => {
     try {
       const res = await createRoom({
-        variables: { adminName }
+        variables: { adminName },
+        update: (cache, { data: { createRoom } }) => {
+          const existingRooms = cache.readQuery({ query: GET_ROOMS });
+          cache.writeQuery({
+            query: GET_ROOMS,
+            data: { getRooms: [...existingRooms.getRooms, createRoom] },
+          });
+        },
       });
 
       const roomCode = res.data.createRoom.room_code;
       localStorage.setItem("participantId", res.data.createRoom.admin_id.id);
       localStorage.setItem("roomCode", roomCode);
-      toast.success('Room created successfully!');
+      toast.success("Room created successfully!");
       navigate(`/room/${roomCode}`);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to create room.');
+      toast.error("Failed to create room.");
     }
   };
 
@@ -46,7 +60,9 @@ export default function HomePage() {
       </div>
 
       <div className="mt-8">
-        <h2 className="text-2xl font-bold mb-4 text-green-500">Available Rooms</h2>
+        <h2 className="text-2xl font-bold mb-4 text-green-500">
+          Available Rooms
+        </h2>
         <RoomList rooms={data.getRooms} />
       </div>
     </div>

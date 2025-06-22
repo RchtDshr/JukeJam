@@ -19,7 +19,7 @@ export default function RoomPage() {
       localStorage.removeItem("participantId");
       localStorage.removeItem("roomCode");
       toast.success("Left room");
-      navigate("/");
+      navigate("/", { state: { refreshRooms: true } });
     } catch (err) {
       console.error(err);
       toast.error("Error leaving room");
