@@ -19,3 +19,12 @@ export const PARTICIPANT_LEFT = gql`
     }
   }
 `;
+
+export const PARTICIPANTS_UPDATED = gql`
+  subscription ParticipantsUpdated($roomCode: String!) {
+    participantsUpdated(roomCode: $roomCode) {
+      id
+      name
+    }
+  }
+`;

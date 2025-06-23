@@ -90,10 +90,15 @@ const resolvers = {
         participantsUpdated: {
             subscribe: withFilter(
                 () => pubsub.asyncIterator('PARTICIPANTS_UPDATED'),
-                (payload, variables) => {
-                    return payload.participantsUpdated.roomCode === variables.roomCode;
+                (payload, variables) => {                    
+                    // Filter based on roomCode at top level of payload
+                    return payload.roomCode === variables.roomCode;
                 }
             ),
+            resolve: (payload) => {                
+                // Return the participants array directly as expected by frontend
+                return payload.participantsUpdated;
+            }
         },
         currentSongChanged: {
             subscribe: withFilter(
