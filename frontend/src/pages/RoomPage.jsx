@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useSubscription, useMutation } from "@apollo/client";
 import { GET_ROOM } from "../graphql/queries";
@@ -49,8 +49,6 @@ export default function RoomPage() {
       console.log("PARTICIPANT_JOINED received:", newParticipant);
       toast.success(`${newParticipant.name} joined!`);
 
-      // Don't manually update participants here - let PARTICIPANTS_UPDATED handle it
-      // This prevents race conditions and duplicate entries
     },
   });
 
@@ -67,8 +65,6 @@ export default function RoomPage() {
       }
 
       toast.success(`${leftParticipant.name} left the room.`);
-
-      // Don't manually update participants here - let PARTICIPANTS_UPDATED handle it
     },
   });
 
@@ -81,7 +77,6 @@ export default function RoomPage() {
 
   // This is the main subscription that handles all participant list updates
   useEffect(() => {
-    console.log("participantsUpdateData:", participantsUpdateData);
     if (participantsUpdateData?.participantsUpdated) {
       console.log(
         "Updating participants from subscription:",
@@ -95,9 +90,6 @@ export default function RoomPage() {
   if (error) return <p className="text-red-500">Error: {error.message}</p>;
 
   const room = data.getRoom;
-
-  console.log("Current participants state:", participants);
-  console.log("Room members from query:", room.members);
 
   return (
     <div className="min-h-screen bg-[#121212] text-white flex flex-col">
