@@ -39,7 +39,10 @@ const resolvers = {
     },
     Mutation: {
         createRoom: (_, { adminName }) => roomService.createRoom(adminName),
-        joinRoom: (_, { roomCode, name }) => participantService.joinRoom(roomCode, name),
+        joinRoom: async (_, { roomCode, name }) => {
+            const roomId = await getRoomIdByCode(roomCode);
+            return participantService.joinRoom(roomId, name);
+        },
         leaveRoom: async (_, { roomCode, participantId }) => {
             const roomId = await getRoomIdByCode(roomCode);
             return participantService.leaveRoom(roomId, participantId);
