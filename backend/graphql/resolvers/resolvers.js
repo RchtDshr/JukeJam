@@ -57,7 +57,7 @@ const resolvers = {
         },
         setCurrentSong: async (_, { roomCode, songId }) => {
             const roomId = await getRoomIdByCode(roomCode);
-            return roomService.setCurrentSong(roomId, songId);
+            return songService.setCurrentSong(roomId, songId);
         },
     },
     Subscription: {
@@ -68,6 +68,9 @@ const resolvers = {
                     return payload.songQueueUpdated.roomCode === variables.roomCode;
                 }
             ),
+            resolve: (payload) => {
+                return payload.songQueueUpdated.queue;
+            }
         },
         participantJoined: {
             subscribe: withFilter(

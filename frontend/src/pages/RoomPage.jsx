@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useSubscription, useMutation } from "@apollo/client";
-import { GET_ROOM } from "../graphql/queries";
-import { PARTICIPANT_JOINED, PARTICIPANT_LEFT, PARTICIPANTS_UPDATED } from "../graphql/subscriptions";
+import { GET_ROOM, GET_SONG_QUEUE } from "../graphql/queries";
+import { SONG_QUEUE_UPDATED, PARTICIPANT_JOINED, PARTICIPANT_LEFT, PARTICIPANTS_UPDATED } from "../graphql/subscriptions";
 import { LEAVE_ROOM } from "../graphql/mutations";
 import { toast, Toaster } from "react-hot-toast";
 import YouTubeSearch from "../components/YoutubeSearch";
@@ -11,18 +11,30 @@ import YouTube from "react-youtube";
 export default function RoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const { loading, error, data } = useQuery(GET_ROOM, { variables: { roomCode } });
+
+  const { loading: roomLoading, error: roomError, data: roomData } = useQuery(GET_ROOM, { variables: { roomCode } });
+  const { loading: queueLoading, data: queueData, refetch } = useQuery(GET_SONG_QUEUE, { variables: { roomCode } });
+
+  const { data: subscriptionData } = useSubscription(SONG_QUEUE_UPDATED, {
+    variables: { roomCode }
+  });
+
   const [leaveRoom] = useMutation(LEAVE_ROOM);
   const participantId = localStorage.getItem("participantId");
   const [participants, setParticipants] = useState([]);
-  const [videoQueue, setVideoQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    if (data?.getRoom?.members) {
-      setParticipants(data.getRoom.members);
+    if (roomData?.getRoom?.members) {
+      setParticipants(roomData.getRoom.members);
     }
-  }, [data]);
+  }, [roomData]);
+
+  useEffect(() => {
+    if (subscriptionData) {
+      refetch();
+    }
+  }, [subscriptionData, refetch]);
 
   const handleLeave = async () => {
     try {
@@ -37,6 +49,7 @@ export default function RoomPage() {
     }
   };
 
+  // Subscriptions for participants
   useSubscription(PARTICIPANT_JOINED, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
@@ -65,21 +78,14 @@ export default function RoomPage() {
     }
   }, [participantsUpdateData]);
 
-  if (loading) return <p className="text-white">Loading room...</p>;
-  if (error) return <p className="text-red-500">Error: {error.message}</p>;
+  if (roomLoading || queueLoading) return <p className="text-white">Loading...</p>;
+  if (roomError) return <p className="text-red-500">Error: {roomError.message}</p>;
 
-  const room = data.getRoom;
-
-  const handleAddVideo = (videoItem) => {
-    const newVideo = {
-      videoId: videoItem.id.videoId,
-      title: videoItem.snippet.title
-    };
-    setVideoQueue([...videoQueue, newVideo]);
-  };
+  const room = roomData.getRoom;
+  const songQueue = queueData.getSongQueue;
 
   const handleVideoEnd = () => {
-    if (currentIndex + 1 < videoQueue.length) {
+    if (currentIndex + 1 < songQueue.length) {
       setCurrentIndex(currentIndex + 1);
     }
   };
@@ -97,27 +103,27 @@ export default function RoomPage() {
       <div className="flex flex-1">
         <div className="flex-1 p-6">
           <h2 className="text-xl font-bold mb-4 text-green-400">YouTube Player</h2>
-          {videoQueue.length > 0 ? (
+          {songQueue.length > 0 ? (
             <>
               <YouTube
-                videoId={videoQueue[currentIndex].videoId}
+                videoId={extractVideoId(songQueue[currentIndex].youtube_url)}
                 opts={{ width: "100%", height: "500" }}
                 onEnd={handleVideoEnd}
               />
-              <p className="mt-2 text-lg">{videoQueue[currentIndex].title}</p>
+              <p className="mt-2 text-lg">{songQueue[currentIndex].title}</p>
             </>
           ) : (
             <p>No video playing. Search and add videos!</p>
           )}
 
-          <YouTubeSearch onAddVideo={handleAddVideo} />
+          <YouTubeSearch roomCode={roomCode} />
 
           <div className="mt-6">
             <h3 className="text-lg font-bold">Queue</h3>
             <ul className="list-disc ml-6">
-              {videoQueue.map((v, idx) => (
-                <li key={v.videoId} className={idx === currentIndex ? "text-green-400" : ""}>
-                  {v.title}
+              {songQueue.map((song, idx) => (
+                <li key={song.id} className={idx === currentIndex ? "text-green-400" : ""}>
+                  {song.title}
                 </li>
               ))}
             </ul>
@@ -144,4 +150,10 @@ export default function RoomPage() {
       </div>
     </div>
   );
+}
+
+// Helper function to extract videoId from full YouTube URL
+function extractVideoId(url) {
+  const urlObj = new URL(url);
+  return urlObj.searchParams.get("v");
 }

@@ -1,12 +1,17 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { useMutation } from '@apollo/client';
+import { ADD_SONG_TO_QUEUE } from '../graphql/mutations';
 
-export default function YouTubeSearch({ onAddVideo }) {
+export default function YouTubeSearch({ roomCode }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
 
+  const participantId = localStorage.getItem('participantId');
+  const [addSongToQueue] = useMutation(ADD_SONG_TO_QUEUE);
+
   const searchYouTube = async () => {
-    const API_KEY = "AIzaSyCAJPMRAHeRR7QmI3H4aayTr_a4JMfUjRg"; // store securely in env file
+    const API_KEY = "AIzaSyCAJPMRAHeRR7QmI3H4aayTr_a4JMfUjRg"; // move to .env later
     const response = await axios.get(
       `https://www.googleapis.com/youtube/v3/search`, {
         params: {
@@ -19,6 +24,23 @@ export default function YouTubeSearch({ onAddVideo }) {
       }
     );
     setResults(response.data.items);
+  };
+
+  const handleAddToQueue = async (item) => {
+    try {
+        console.log("Adding song to queue", item.snippet.title, item.id.videoId);
+      await addSongToQueue({
+        variables: {
+          roomCode,
+          addedBy: participantId,
+          youtubeUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+          title: item.snippet.title
+        }
+      });
+      alert("Song added to queue!");
+    } catch (err) {
+      console.error("Error adding song to queue", err);
+    }
   };
 
   return (
@@ -38,7 +60,7 @@ export default function YouTubeSearch({ onAddVideo }) {
             <div>{item.snippet.title}</div>
             <button
               className="bg-blue-500 p-1 rounded"
-              onClick={() => onAddVideo(item)}
+              onClick={() => handleAddToQueue(item)}
             >
               Add to Queue
             </button>

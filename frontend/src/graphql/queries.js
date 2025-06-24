@@ -30,3 +30,18 @@ export const GET_ROOM = gql`
     }
   }
 `;
+
+export const GET_SONG_QUEUE = gql`
+  query GetSongQueue($roomCode: String!) {
+    getSongQueue(roomCode: $roomCode) {
+      id
+      youtube_url
+      title
+      added_by {
+        id
+        name
+      }
+      added_at
+    }
+  }
+`;

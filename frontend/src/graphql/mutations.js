@@ -30,3 +30,15 @@ export const LEAVE_ROOM = gql`
     }
   }
 `;
+
+export const ADD_SONG_TO_QUEUE = gql`
+  mutation AddSong($roomCode: String!, $addedBy: ID!, $youtubeUrl: String!, $title: String!) {
+  addSong(roomCode: $roomCode, addedBy: $addedBy, youtubeUrl: $youtubeUrl, title: $title) {
+    title
+    added_by {
+      name
+    }
+    youtube_url
+  }
+}
+`;

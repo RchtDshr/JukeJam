@@ -48,14 +48,42 @@ async function getSongById(songId) {
     return result.rows[0];
 }
 
+async function setCurrentSong(roomId, songId) {
+    // Update the current song for the room
+    await pool.query(
+        `UPDATE rooms SET current_song_id = $1 WHERE id = $2`,
+        [songId, roomId]
+    );
+
+    // Notify clients via subscription
+    const song = await getSongById(songId);
+    const roomRes = await pool.query('SELECT room_code FROM rooms WHERE id = $1', [roomId]);
+    const roomCode = roomRes.rows[0].room_code;
+
+    pubsub.publish('CURRENT_SONG_CHANGED', {
+        currentSongChanged: {
+            roomCode,
+            song
+        }
+    });
+
+    return song;
+}
+
 async function notifySongQueueUpdated(roomId) {
   const queue = await getSongQueue(roomId);
-  pubsub.publish('SONG_QUEUE_UPDATED', { songQueueUpdated: queue });
+  const roomRes = await pool.query('SELECT room_code FROM rooms WHERE id = $1', [roomId]);
+  const roomCode = roomRes.rows[0].room_code;
+
+  pubsub.publish('SONG_QUEUE_UPDATED', { 
+    songQueueUpdated: { roomCode, queue } 
+  });
 }
 
 module.exports = {
   addSong,
   getSongQueue,
   getSongById,
-  notifySongQueueUpdated
+  notifySongQueueUpdated,
+  setCurrentSong
 };

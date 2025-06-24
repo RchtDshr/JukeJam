@@ -67,17 +67,10 @@ async function getRoomById(roomId) {
   return res.rows[0];
 }
 
-async function setCurrentSong(roomId, songId) {
-  await pool.query('UPDATE rooms SET current_song_id = $1 WHERE id = $2', [songId, roomId]);
-  const songRes = await pool.query('SELECT * FROM songs WHERE id = $1', [songId]);
-  pubsub.publish('CURRENT_SONG_CHANGED', { currentSongChanged: songRes.rows[0] });
-  return true;
-}
-
 module.exports = {
     createRoom,
     getRooms,
     getRoomById,
     getRoomByCode,
-    setCurrentSong
+    
 }

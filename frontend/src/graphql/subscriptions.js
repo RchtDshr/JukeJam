@@ -28,3 +28,18 @@ export const PARTICIPANTS_UPDATED = gql`
     }
   }
 `;
+
+export const SONG_QUEUE_UPDATED = gql`
+  subscription SongQueueUpdated($roomCode: String!) {
+    songQueueUpdated(roomCode: $roomCode) {
+      id
+      youtube_url
+      title
+      added_by {
+        id
+        name
+      }
+      added_at
+    }
+  }
+`;
