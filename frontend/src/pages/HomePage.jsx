@@ -7,6 +7,7 @@ import RoomList from "../components/RoomList";
 import CreateRoomModal from "../components/CreateRoomModal";
 import { Toaster, toast } from "react-hot-toast";
 import { FaMusic } from "react-icons/fa";
+import Test from "../components/Test";
 
 export default function HomePage() {
   const { loading, error, data, refetch } = useQuery(GET_ROOMS);
@@ -50,6 +51,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#121212] text-white p-8">
       <Toaster />
+      <Test/>
       <div className="flex flex-col items-center mb-12">
         <div className="flex items-center gap-3 mb-4">
           <FaMusic className="text-green-500 text-4xl" />

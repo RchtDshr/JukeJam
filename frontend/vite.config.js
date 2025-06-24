@@ -8,6 +8,16 @@ export default defineConfig({
   server: {
     watch: {
       usePolling: true
+    },
+    proxy: {
+    '/graphql': {
+      target: 'http://localhost:4000',
+      changeOrigin: true,
+    },
+    '/sync': {
+      target: 'ws://localhost:4000',
+      ws: true, // very important
     }
+  }
   }
 })

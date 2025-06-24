@@ -11,26 +11,23 @@ const typeDefs = require('./graphql/schema/typeDefs');
 const resolvers = require('./graphql/resolvers/resolvers');
 const pubsub = require('./graphql/pubsub/pubsub.js');
 
-// Build schema manually
+// Build GraphQL schema
 const schema = makeExecutableSchema({
   typeDefs,
   resolvers,
 });
 
-// Set up Express app
+// --- GraphQL Server Setup ---
 const app = express();
 const httpServer = http.createServer(app);
 
-// Create WebSocket server
-const wsServer = new WebSocketServer({
+// Create WebSocketServer for GraphQL subscriptions (port 4000)
+const graphqlWsServer = new WebSocketServer({
   server: httpServer,
   path: '/graphql',
 });
+useServer({ schema, context: () => ({ pubsub }) }, graphqlWsServer);
 
-// Integrate graphql-ws
-useServer({ schema, context: () => ({ pubsub }) }, wsServer);
-
-// Create Apollo Server instance
 const server = new ApolloServer({
   schema,
   context: () => ({ pubsub }),
@@ -39,30 +36,57 @@ const server = new ApolloServer({
     async serverWillStart() {
       return {
         async drainServer() {
-          await wsServer.close();
+          await graphqlWsServer.close();
         },
       };
     },
   }],
 });
 
-// Start Apollo Server
+// Start servers
 (async () => {
   await server.start();
   server.applyMiddleware({ app });
 
   const PORT = process.env.PORT || 4000;
   httpServer.listen(PORT, async () => {
-    console.log(`🚀 Server ready at http://localhost:${PORT}`);
-    console.log(`🚀 Subscriptions ready at ws://localhost:${PORT}${server.graphqlPath}`);
+    console.log(`🚀 GraphQL Server ready at http://localhost:${PORT}`);
+    console.log(`🚀 Subscriptions ready at ws://localhost:${PORT}/graphql`);
 
-    // Test Redis connection
+    // Redis Test
     await redis.set('project', 'collab-music');
     const redisVal = await redis.get('project');
     console.log('✅ Redis Connected! Value:', redisVal);
 
-    // Test PostgreSQL connection
+    // Postgres Test
     const res = await pg.query('SELECT NOW()');
     console.log('✅ PostgreSQL Connected! Time:', res.rows[0].now);
   });
 })();
+// --- Custom WebSocket Server on Port 3000 ---
+const rawWSServer = new WebSocketServer({ port: 3000 });
+console.log('🧪 Raw WebSocket server running on ws://localhost:3000');
+
+// Keep track of connected clients
+const clients = new Set();
+
+rawWSServer.on('connection', socket => {
+  console.log('🧠 [WS3000] New client connected');
+  clients.add(socket);
+
+  socket.on('message', msg => {
+    console.log('💬 [WS3000] Received:', msg.toString());
+
+    // Broadcast message to all other clients
+    clients.forEach(client => {
+      if (client !== socket && client.readyState === client.OPEN) {
+        client.send(msg.toString());
+      }
+    });
+  });
+
+  socket.on('close', () => {
+    console.log('🔌 [WS3000] Client disconnected');
+    clients.delete(socket);
+  });
+});
