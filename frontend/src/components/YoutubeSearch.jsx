@@ -37,9 +37,9 @@ export default function YouTubeSearch({ roomCode }) {
           title: item.snippet.title
         }
       });
-      alert("Song added to queue!");
+      toast.success("Song added to queue!");
     } catch (err) {
-      console.error("Error adding song to queue", err);
+      toast.error("Error adding song to queue", err);
     }
   };
 
