@@ -83,28 +83,39 @@ export default function Queue() {
   };
 
   const handleVideoEnd = async () => {
-    if (!currentSong) return;
+  if (!currentSong) return;
 
-    try {
-      const currentIndex = songQueue.findIndex((s) => s.id === currentSong.id);
-      const nextSong = songQueue[currentIndex + 1];
-      console.log("Next song:", nextSong);
+  try {
+    const currentIndex = songQueue.findIndex((s) => s.id === currentSong.id);
+    const nextSong = songQueue[currentIndex + 1];
 
-      if (nextSong) {
-        await setCurrentSongMutation({
-          variables: {
-            roomCode,
-            songId: nextSong.id,
-          },
-        });
-      } else {
-        toast("Queue finished.");
-      }
-    } catch (error) {
-      console.error("Error in handleVideoEnd:", error.message);
-      toast.error("Failed to move to next song.");
+    if (nextSong) {
+      // 1. Set next song as current
+      await setCurrentSongMutation({
+        variables: {
+          roomCode,
+          songId: nextSong.id,
+        },
+      });
+
+      // 2. Remove current song from queue
+      await removeSongMutation({
+        variables: {
+          roomCode,
+          songId: currentSong.id,
+        },
+      });
+    } else {
+      // Queue has finished
+      toast("Queue finished.");
+      // Optional: You might clear current song here
     }
-  };
+  } catch (error) {
+    console.error("Error in handleVideoEnd:", error.message);
+    toast.error("Failed to move to next song.");
+  }
+};
+
 
   const playerOptions = {
     width: "100%",
