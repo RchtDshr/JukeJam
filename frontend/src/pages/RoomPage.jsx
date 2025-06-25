@@ -7,6 +7,7 @@ import { LEAVE_ROOM } from "../graphql/mutations";
 import { toast, Toaster } from "react-hot-toast";
 import YouTubeSearch from "../components/YoutubeSearch";
 import YouTube from "react-youtube";
+import Queue from "../components/Queue";
 
 export default function RoomPage() {
   const { roomCode } = useParams();
@@ -102,33 +103,10 @@ export default function RoomPage() {
       
       <div className="flex flex-1">
         <div className="flex-1 p-6">
-          <h2 className="text-xl font-bold mb-4 text-green-400">YouTube Player</h2>
-          {songQueue.length > 0 ? (
-            <>
-              <YouTube
-                videoId={extractVideoId(songQueue[currentIndex].youtube_url)}
-                opts={{ width: "100%", height: "500" }}
-                onEnd={handleVideoEnd}
-              />
-              <p className="mt-2 text-lg">{songQueue[currentIndex].title}</p>
-            </>
-          ) : (
-            <p>No video playing. Search and add videos!</p>
-          )}
-          <YouTubeSearch roomCode={roomCode} />
-          
-          <div className="mt-6">
-            <h3 className="text-lg font-bold">Queue</h3>
-            <ul className="list-disc ml-6">
-              {songQueue.map((song, idx) => (
-                <li key={song.id} className={idx === currentIndex ? "text-green-400" : ""}>
-                  {song.title} <span className="ml-12"> added by</span> {song.added_by.name}
-                </li>
-              ))}
-            </ul>
+          <Queue songQueue={songQueue} />
+<YouTubeSearch roomCode={roomCode} />
+
           </div>
-        </div>
-        
         <div className="w-80 bg-[#1e1e1e] p-6 border-l border-green-700">
           <h2 className="text-xl font-bold mb-4 text-green-400">Participants ({participants.length})</h2>
           <ul className="space-y-2">

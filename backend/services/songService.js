@@ -35,6 +35,31 @@ async function addSong(roomId, addedBy, youtubeUrl, title) {
   return res.rows[0];
 }
 
+async function removeSong(roomId, songId) {
+  try {
+    // Check if the song exists in the room
+    const result = await pool.query(
+      `SELECT id FROM song_queue WHERE id = $1 AND room_id = $2`,
+      [songId, roomId]
+    );
+
+    if (result.rowCount === 0) {
+      return false; // Song not found in queue
+    }
+
+    // Delete the song from the queue
+    await pool.query(`DELETE FROM song_queue WHERE id = $1`, [songId]);
+
+    // Notify clients about the updated queue
+    await notifySongQueueUpdated(roomId);
+
+    return true;
+  } catch (err) {
+    console.error("Error in removeSong:", err);
+    return false;
+  }
+}
+
 async function getSongQueue(roomId) {
     const res = await pool.query(
         `SELECT * FROM song_queue WHERE room_id = $1 ORDER BY added_at ASC`,
@@ -82,6 +107,7 @@ async function notifySongQueueUpdated(roomId) {
 
 module.exports = {
   addSong,
+  removeSong,
   getSongQueue,
   getSongById,
   notifySongQueueUpdated,

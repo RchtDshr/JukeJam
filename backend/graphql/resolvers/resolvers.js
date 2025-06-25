@@ -55,6 +55,10 @@ const resolvers = {
             const roomId = await getRoomIdByCode(roomCode);
             return songService.addSong(roomId, addedBy, youtubeUrl, title);
         },
+        removeSongFromQueue: async (_, { roomCode, songId }) => {
+            const roomId = await getRoomIdByCode(roomCode);
+            return songService.removeSong(roomId, songId);
+        },
         setCurrentSong: async (_, { roomCode, songId }) => {
             const roomId = await getRoomIdByCode(roomCode);
             return songService.setCurrentSong(roomId, songId);
@@ -93,12 +97,12 @@ const resolvers = {
         participantsUpdated: {
             subscribe: withFilter(
                 () => pubsub.asyncIterator('PARTICIPANTS_UPDATED'),
-                (payload, variables) => {                    
+                (payload, variables) => {
                     // Filter based on roomCode at top level of payload
                     return payload.roomCode === variables.roomCode;
                 }
             ),
-            resolve: (payload) => {                
+            resolve: (payload) => {
                 // Return the participants array directly as expected by frontend
                 return payload.participantsUpdated;
             }

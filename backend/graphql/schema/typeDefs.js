@@ -42,6 +42,7 @@ const typeDefs = gql`
     joinRoom(roomCode: String!, name: String!): Participant
     leaveRoom(roomCode: String!, participantId: ID!): Participant
     addSong(roomCode: String!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
+    removeSongFromQueue(roomCode: String!, songId: ID!): Boolean
     kickParticipant(roomCode: String!, participantId: ID!): Boolean
     setCurrentSong(roomCode: String!, songId: ID!): Boolean
   }

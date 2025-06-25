@@ -1,47 +1,36 @@
-import { useEffect, useState } from "react";
+// components/Queue.js
+
+import { useState, useEffect } from "react";
 import YouTube from "react-youtube";
 import { toast } from "react-hot-toast";
-import { useMutation, useQuery, useSubscription } from "@apollo/client";
+import { useMutation } from "@apollo/client";
 import { REMOVE_SONG_FROM_QUEUE } from "../graphql/mutations";
-import { GET_SONG_QUEUE } from "../graphql/queries";
-import { SONG_QUEUE_UPDATED } from "../graphql/subscriptions";
-
 // Helper to extract video ID
 const extractVideoId = (url) => {
   const urlObj = new URL(url);
   return urlObj.searchParams.get("v");
 };
 
-export default function Queue({ roomCode }) {
+export default function Queue({ songQueue }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [removeSongMutation] = useMutation(REMOVE_SONG_FROM_QUEUE);
-
-  const { data, loading, error, refetch } = useQuery(GET_SONG_QUEUE, {
-    variables: { roomCode },
-  });
-
-  useSubscription(SONG_QUEUE_UPDATED, {
-    variables: { roomCode },
-    onSubscriptionData: () => {
-      refetch();
-    },
-  });
-
-  const songQueue = data?.getSongQueue || [];
-
-  useEffect(() => {
-    setCurrentIndex(0); // Reset when song queue updates
-  }, [songQueue]);
-
+const roomCode = localStorage.getItem("roomCode");
   const handleRemoveSong = async (songId) => {
     try {
-      await removeSongMutation({ variables: { roomCode, songId } });
+      await removeSongMutation({
+        variables: { roomCode, songId },
+      });
       toast.success("Song removed from queue");
+    //   refetchQueue(); // Optional: Refetch queue if not using subscriptions
     } catch (err) {
       console.error(err);
       toast.error("Failed to remove song");
     }
   };
+  useEffect(() => {
+    // Reset index when queue updates
+    setCurrentIndex(0);
+  }, [songQueue]);
 
   const handleVideoEnd = () => {
     if (currentIndex + 1 < songQueue.length) {
@@ -51,11 +40,9 @@ export default function Queue({ roomCode }) {
     }
   };
 
-  if (loading) return <p className="text-white">Loading queue...</p>;
-  if (error) return <p className="text-red-500">Error loading queue: {error.message}</p>;
-
   return (
     <div>
+      <h2 className="text-xl font-bold mb-4 text-green-400">YouTube Player</h2>
       {songQueue.length > 0 ? (
         <>
           <YouTube
@@ -75,16 +62,10 @@ export default function Queue({ roomCode }) {
           {songQueue.map((song, idx) => (
             <li
               key={song.id}
-              className={`flex justify-between items-center ${
-                idx === currentIndex ? "text-green-400" : ""
-              }`}
+              className={idx === currentIndex ? "text-green-400" : ""}
             >
-              <span>
-                {song.title}
-                <span className="ml-12">added by</span>{" "}
-                {song.added_by?.name || "Unknown"}
-              </span>
-
+              {song.title} <span className="ml-12">added by</span>{" "}
+              {song.added_by?.name || "Unknown"}
               <button
                 onClick={() => handleRemoveSong(song.id)}
                 className="ml-4 text-red-400 hover:text-red-600"

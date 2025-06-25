@@ -42,3 +42,10 @@ export const ADD_SONG_TO_QUEUE = gql`
   }
 }
 `;
+
+
+export const REMOVE_SONG_FROM_QUEUE = gql`
+  mutation RemoveSongFromQueue($roomCode: String!, $songId: ID!) {
+    removeSongFromQueue(roomCode: $roomCode, songId: $songId)
+  }
+`;
