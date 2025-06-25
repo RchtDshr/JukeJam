@@ -30,6 +30,7 @@ const typeDefs = gql`
     getRoom(roomCode: String!): Room
     getParticipants(roomCode: String!): [Participant]
     getSongQueue(roomCode: String!): [Song]
+    getCurrentSong(roomCode: String!): Song
   }
 
   type LeaveRoomResponse {
@@ -44,7 +45,7 @@ const typeDefs = gql`
     addSong(roomCode: String!, addedBy: ID!, youtubeUrl: String!, title: String!): Song
     removeSongFromQueue(roomCode: String!, songId: ID!): Boolean
     kickParticipant(roomCode: String!, participantId: ID!): Boolean
-    setCurrentSong(roomCode: String!, songId: ID!): Boolean
+    setCurrentSong(roomCode: String!, songId: ID!): Song
   }
 
   type Subscription {

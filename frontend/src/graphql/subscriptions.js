@@ -43,3 +43,17 @@ export const SONG_QUEUE_UPDATED = gql`
     }
   }
 `;
+
+export const CURRENT_SONG_CHANGED = gql`
+  subscription CurrentSongChanged($roomCode: String!) {
+  currentSongChanged(roomCode: $roomCode) {
+    id
+    title
+    youtube_url
+    added_by {
+      name
+      id
+    }
+  }
+}
+`;

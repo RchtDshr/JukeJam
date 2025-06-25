@@ -49,3 +49,16 @@ export const REMOVE_SONG_FROM_QUEUE = gql`
     removeSongFromQueue(roomCode: $roomCode, songId: $songId)
   }
 `;
+
+export const SET_CURRENT_SONG = gql`
+  mutation SetCurrentSong($roomCode: String!, $songId: ID!) {
+    setCurrentSong(roomCode: $roomCode, songId: $songId) {
+      id
+      title
+      youtube_url
+      added_by {
+        name
+      }
+    }
+  }
+`;

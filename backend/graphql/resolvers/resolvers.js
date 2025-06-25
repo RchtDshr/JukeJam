@@ -36,6 +36,12 @@ const resolvers = {
             const roomId = await getRoomIdByCode(roomCode);
             return songService.getSongQueue(roomId);
         },
+        getCurrentSong: async (_, { roomCode }) => {
+            const roomId = await getRoomIdByCode(roomCode);
+            const room = await roomService.getRoomById(roomId);
+            if (!room.current_song_id) return null;
+            return songService.getSongById(room.current_song_id);
+        },
     },
     Mutation: {
         createRoom: (_, { adminName }) => roomService.createRoom(adminName),
@@ -109,11 +115,14 @@ const resolvers = {
         },
         currentSongChanged: {
             subscribe: withFilter(
-                () => pubsub.asyncIterator('CURRENT_SONG_CHANGED'),
+                () => pubsub.asyncIterator("CURRENT_SONG_CHANGED"),
                 (payload, variables) => {
                     return payload.currentSongChanged.roomCode === variables.roomCode;
                 }
             ),
+            resolve: (payload) => {
+                return payload.currentSongChanged.song; // only return the song to clients
+            }
         }
     }
 };

@@ -3,7 +3,8 @@ const pubsub = require('../graphql/pubsub/pubsub.js');
 const { v4: uuidv4 } = require('uuid');
 
 async function addSong(roomId, addedBy, youtubeUrl, title) {
-  const songId = uuidv4();
+  try {
+    const songId = uuidv4();
 
   // Insert the song into song_queue table
   await pool.query(
@@ -33,6 +34,10 @@ async function addSong(roomId, addedBy, youtubeUrl, title) {
   // Return inserted song row
   const res = await pool.query('SELECT * FROM song_queue WHERE id = $1', [songId]);
   return res.rows[0];
+  } catch (err) {
+    console.error("Error in addSong:", err);
+    throw new Error("Failed to add song");
+  }
 }
 
 async function removeSong(roomId, songId) {
@@ -61,38 +66,47 @@ async function removeSong(roomId, songId) {
 }
 
 async function getSongQueue(roomId) {
-    const res = await pool.query(
-        `SELECT * FROM song_queue WHERE room_id = $1 ORDER BY added_at ASC`,
-        [roomId]
-    );
-    return res.rows;
+  const res = await pool.query(
+    `SELECT * FROM song_queue WHERE room_id = $1 ORDER BY added_at ASC`,
+    [roomId]
+  );
+  return res.rows;
 }
 
 async function getSongById(songId) {
-    const result = await pool.query('SELECT id, room_id, youtube_url, title, added_by, added_at FROM song_queue WHERE id = $1', [songId]);
-    return result.rows[0];
+  const result = await pool.query('SELECT id, room_id, youtube_url, title, added_by, added_at FROM song_queue WHERE id = $1', [songId]);
+  return result.rows[0];
 }
 
 async function setCurrentSong(roomId, songId) {
-    // Update the current song for the room
-    await pool.query(
-        `UPDATE rooms SET current_song_id = $1 WHERE id = $2`,
-        [songId, roomId]
-    );
+  try {
 
+    await pool.query(
+      `UPDATE rooms SET current_song_id = $1 WHERE id = $2`,
+      [songId, roomId]
+    );
     // Notify clients via subscription
     const song = await getSongById(songId);
+
+    console.log("✅ [setCurrentSong] Broadcasting new song:", song);
+
     const roomRes = await pool.query('SELECT room_code FROM rooms WHERE id = $1', [roomId]);
     const roomCode = roomRes.rows[0].room_code;
+    
+    console.log(`🎯 [setCurrentSong] roomCode: ${roomCode}, songId: ${songId}`);
 
-    pubsub.publish('CURRENT_SONG_CHANGED', {
-        currentSongChanged: {
-            roomCode,
-            song
-        }
+    pubsub.publish("CURRENT_SONG_CHANGED", {
+      currentSongChanged: {
+        roomCode,
+        song,
+      },
     });
 
     return song;
+  } catch (err) {
+    console.error("❌ Error in setCurrentSong resolver:", err);
+    throw new Error("Failed to set current song");
+  }
 }
 
 async function notifySongQueueUpdated(roomId) {
@@ -100,8 +114,8 @@ async function notifySongQueueUpdated(roomId) {
   const roomRes = await pool.query('SELECT room_code FROM rooms WHERE id = $1', [roomId]);
   const roomCode = roomRes.rows[0].room_code;
 
-  pubsub.publish('SONG_QUEUE_UPDATED', { 
-    songQueueUpdated: { roomCode, queue } 
+  pubsub.publish('SONG_QUEUE_UPDATED', {
+    songQueueUpdated: { roomCode, queue }
   });
 }
 

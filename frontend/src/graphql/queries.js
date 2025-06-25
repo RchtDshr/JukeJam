@@ -45,3 +45,16 @@ export const GET_SONG_QUEUE = gql`
     }
   }
 `;
+
+export const GET_CURRENT_SONG = gql`
+  query GetCurrentSong($roomCode: String!) {
+    getCurrentSong(roomCode: $roomCode) {
+      id
+      youtube_url
+      title
+      added_by {
+        name
+      }
+    }
+  }
+`;
