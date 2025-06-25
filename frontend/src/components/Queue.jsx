@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import YouTube from "react-youtube";
 import { useMutation, useLazyQuery, useSubscription } from "@apollo/client";
 import { toast } from "react-hot-toast";
+import { Play, Trash2, Music, Users, Clock } from "lucide-react";
 import { REMOVE_SONG_FROM_QUEUE, SET_CURRENT_SONG } from "../graphql/mutations";
 import { GET_CURRENT_SONG, GET_SONG_QUEUE } from "../graphql/queries";
 import {
@@ -18,6 +19,7 @@ export default function Queue() {
   const roomCode = localStorage.getItem("roomCode");
   const [currentSong, setCurrentSongState] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
   
   const [getCurrentSong] = useLazyQuery(GET_CURRENT_SONG, {
     variables: { roomCode },
@@ -54,7 +56,6 @@ export default function Queue() {
     },
   });
 
-  // ✅ Add this to update queue in real-time
   useSubscription(SONG_QUEUE_UPDATED, {
     variables: { roomCode },
     onData: ({ data }) => {
@@ -82,86 +83,132 @@ export default function Queue() {
     }
   };
 
-  const handleVideoEnd = async () => {
-  if (!currentSong) return;
-
-  try {
-    const currentIndex = songQueue.findIndex((s) => s.id === currentSong.id);
-    const nextSong = songQueue[currentIndex + 1];
-
-    if (nextSong) {
-      // 1. Set next song as current
+  const handlePlayNow = async (songId) => {
+    try {
       await setCurrentSongMutation({
         variables: {
           roomCode,
-          songId: nextSong.id,
+          songId,
         },
       });
-
-      // 2. Remove current song from queue
-      await removeSongMutation({
-        variables: {
-          roomCode,
-          songId: currentSong.id,
-        },
-      });
-    } else {
-      // Queue has finished
-      toast("Queue finished.");
-      // Optional: You might clear current song here
+      toast.success("Playing song now for everyone!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to play song");
     }
-  } catch (error) {
-    console.error("Error in handleVideoEnd:", error.message);
-    toast.error("Failed to move to next song.");
-  }
-};
+  };
 
+  const handleVideoEnd = async () => {
+    if (!currentSong) return;
+
+    try {
+      const currentIndex = songQueue.findIndex((s) => s.id === currentSong.id);
+      const nextSong = songQueue[currentIndex + 1];
+
+      if (nextSong) {
+        await setCurrentSongMutation({
+          variables: {
+            roomCode,
+            songId: nextSong.id,
+          },
+        });
+
+        await removeSongMutation({
+          variables: {
+            roomCode,
+            songId: currentSong.id,
+          },
+        });
+      } else {
+        toast("Queue finished.");
+      }
+    } catch (error) {
+      console.error("Error in handleVideoEnd:", error.message);
+      toast.error("Failed to move to next song.");
+    }
+  };
 
   const playerOptions = {
     width: "100%",
-    height: "500",
+    height: "400",
     playerVars: {
       autoplay: 1,
+      rel: 0,
+      modestbranding: 1,
     },
   };
+
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4 text-green-400">YouTube Player</h2>
-      {currentSong ? (
-        <>
-          <YouTube
-            key={currentSong.id} // ✅ Force remount on song change
-            videoId={extractVideoId(currentSong.youtube_url)}
-            opts={playerOptions}
-            onEnd={handleVideoEnd}
-          />
+    <div className="min-h-screen  p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
+            <Music className="text-green-400" size={40} />
+            Music Queue
+          </h1>
+          <p className="text-green-200">Room: {roomCode}</p>
+        </div>
 
-          <p className="mt-2 text-lg">{currentSong.title}</p>
-        </>
-      ) : (
-        <p>No video playing. Search and add videos!</p>
-      )}
+        <div className="">
+          {/* YouTube Player Section */}
+          <div className="">
+            <div className="bg-black/30 backdrop-blur-sm rounded-2xl p-6 border border-green-500/20">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <h2 className="text-xl font-bold text-white">Now Playing</h2>
+              </div>
+              
+              {currentSong ? (
+                <div>
+                  <div className="rounded-xl overflow-hidden shadow-2xl mb-4">
+                    <YouTube
+                      key={currentSong.id}
+                      videoId={extractVideoId(currentSong.youtube_url)}
+                      opts={playerOptions}
+                      onEnd={handleVideoEnd}
+                      onReady={() => setIsPlayerReady(true)}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-green-600/20 to-pink-600/20 rounded-xl p-4 border border-green-400/30">
+                    <h3 className="text-lg font-semibold text-white mb-2">{currentSong.title}</h3>
+                    <div className="flex items-center text-green-200 text-sm">
+                      <Users size={16} className="mr-1" />
+                      Added by {currentSong.added_by?.name || "Unknown"}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <Music size={64} className="text-green-400/50 mx-auto mb-4" />
+                  <p className="text-green-200 text-lg">No song playing</p>
+                  <p className="text-green-300/70 text-sm">Add songs to get the party started!</p>
+                </div>
+              )}
+            </div>
+          </div>
 
-      <div className="mt-6">
-        <h3 className="text-lg font-bold">Queue</h3>
-        <ul className="list-disc ml-6">
-          {songQueue.map((song) => (
-            <li
-              key={song.id}
-              className={song.id === currentSong?.id ? "text-green-400" : ""}
-            >
-              {song.title} <span className="ml-12">added by</span>{" "}
-              {song.added_by?.name || "Unknown"}
-              <button
-                onClick={() => handleRemoveSong(song.id)}
-                className="ml-4 text-red-400 hover:text-red-600"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+          </div>
       </div>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(147, 51, 234, 0.5);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(147, 51, 234, 0.7);
+        }
+      `}</style>
     </div>
   );
 }
