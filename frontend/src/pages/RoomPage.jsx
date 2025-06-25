@@ -123,13 +123,12 @@ export default function RoomPage() {
             <ul className="list-disc ml-6">
               {songQueue.map((song, idx) => (
                 <li key={song.id} className={idx === currentIndex ? "text-green-400" : ""}>
-                  {song.title}
+                  {song.title} <span className="ml-12"> added by</span>  {song.added_by.name}
                 </li>
               ))}
             </ul>
           </div>
         </div>
-
         <div className="w-80 bg-[#1e1e1e] p-6 border-l border-green-700">
           <h2 className="text-xl font-bold mb-4 text-green-400">Participants ({participants.length})</h2>
           <ul className="space-y-2">

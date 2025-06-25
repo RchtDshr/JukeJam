@@ -57,19 +57,16 @@ async function joinRoom(roomId, name) {
     client.release();
   }
 }
-
 async function leaveRoom(roomId, participantId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     // Find room by room code
     const roomResult = await client.query('SELECT room_code FROM rooms WHERE id = $1', [roomId]);
     if (roomResult.rows.length === 0) {
       throw new Error('Room not found');
     }
     const roomCode = roomResult.rows[0].room_code;
-
     // 2️⃣ Get participant details before deleting
     const participantRes = await client.query(
       'SELECT id, name FROM participants WHERE id = $1',
@@ -80,7 +77,6 @@ async function leaveRoom(roomId, participantId) {
       throw new Error("Participant not found");
     }
     const participant = participantRes.rows[0];
-
     // 3️⃣ Get role before deleting
     const memberRes = await client.query(
       'SELECT role FROM room_members WHERE room_id = $1 AND participant_id = $2',
@@ -91,31 +87,34 @@ async function leaveRoom(roomId, participantId) {
       throw new Error("Participant not in room");
     }
     const wasAdmin = memberRes.rows[0].role === 'admin';
-
     // 4️⃣ Delete participant from room
     console.log("🔍 Deleting from room_members...");
     const deleteResult = await client.query(
       'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',
       [roomId, participantId]
     );
-
-    // ALSO DELETE FROM PARTICIPANTS TABLE
-    console.log("🔍 Deleting from participants table...");
-    const deleteParticipantResult = await client.query(
-      'DELETE FROM participants WHERE id = $1',
-      [participantId]
-    );
-
+    // NOTE: We DON'T delete from participants table because:
+    // 1. Their songs should continue to exist and play
+    // 2. This would cause foreign key violations if their song is currently playing
+    // The participant record can be cleaned up later by a background job if needed
     // 5️⃣ Check if room is now empty
     const countRes = await client.query(
       'SELECT COUNT(*) FROM room_members WHERE room_id = $1',
       [roomId]
     );
     const remainingCount = parseInt(countRes.rows[0].count);
-
     if (remainingCount === 0) {
       // Room is empty: cleanup
+      // FIRST: Clear current_song_id to avoid foreign key constraint violation
+      console.log("🔍 Clearing current_song_id...");
+      await client.query('UPDATE rooms SET current_song_id = NULL WHERE id = $1', [roomId]);
+      
+      // THEN: Delete from song_queue
+      console.log("🔍 Deleting from song_queue...");
       await client.query('DELETE FROM song_queue WHERE room_id = $1', [roomId]);
+      
+      // FINALLY: Delete the room
+      console.log("🔍 Deleting room...");
       await client.query('DELETE FROM rooms WHERE id = $1', [roomId]);
     } else if (wasAdmin) {
       // Admin left: reassign admin
@@ -124,18 +123,15 @@ async function leaveRoom(roomId, participantId) {
         [roomId]
       );
       const newAdminId = newAdminRes.rows[0].participant_id;
-
       await client.query(
         'UPDATE room_members SET role = $1 WHERE participant_id = $2',
         ['admin', newAdminId]
       );
-
       await client.query(
         'UPDATE rooms SET admin_id = $1 WHERE id = $2',
         [newAdminId, roomId]
       );
     }
-
     // ✅ Publish participantLeft event
     pubsub.publish('PARTICIPANT_LEFT', {
       participantLeft: {
@@ -144,14 +140,10 @@ async function leaveRoom(roomId, participantId) {
         roomCode: roomCode
       }
     });
-
     await notifyParticipantsUpdated(roomId, client);
-
     await client.query('COMMIT');
-
     //  Now directly return the participant who left
     return participant
-
   } catch (err) {
     await client.query('ROLLBACK');
     console.error("Transaction error:", err);
@@ -160,7 +152,6 @@ async function leaveRoom(roomId, participantId) {
     client.release();
   }
 }
-
 async function getParticipantById(participantId) {
   const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
   return result.rows[0];
