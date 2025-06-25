@@ -11,19 +11,17 @@ import YouTube from "react-youtube";
 export default function RoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-
   const { loading: roomLoading, error: roomError, data: roomData } = useQuery(GET_ROOM, { variables: { roomCode } });
   const { loading: queueLoading, data: queueData, refetch } = useQuery(GET_SONG_QUEUE, { variables: { roomCode } });
-
   const { data: subscriptionData } = useSubscription(SONG_QUEUE_UPDATED, {
     variables: { roomCode }
   });
-
   const [leaveRoom] = useMutation(LEAVE_ROOM);
   const participantId = localStorage.getItem("participantId");
   const [participants, setParticipants] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Initialize participants from room data
   useEffect(() => {
     if (roomData?.getRoom?.members) {
       setParticipants(roomData.getRoom.members);
@@ -49,7 +47,7 @@ export default function RoomPage() {
     }
   };
 
-  // Subscriptions for participants
+  // Subscription for participant joined
   useSubscription(PARTICIPANT_JOINED, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
@@ -58,6 +56,7 @@ export default function RoomPage() {
     },
   });
 
+  // Subscription for participant left
   useSubscription(PARTICIPANT_LEFT, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
@@ -68,15 +67,16 @@ export default function RoomPage() {
     },
   });
 
-  const { data: participantsUpdateData } = useSubscription(PARTICIPANTS_UPDATED, {
+  // This is the key fix - handle participants update subscription properly
+  useSubscription(PARTICIPANTS_UPDATED, {
     variables: { roomCode },
+    onSubscriptionData: ({ subscriptionData }) => {
+      if (subscriptionData.data?.participantsUpdated) {
+        console.log('Participants updated:', subscriptionData.data.participantsUpdated);
+        setParticipants(subscriptionData.data.participantsUpdated);
+      }
+    },
   });
-
-  useEffect(() => {
-    if (participantsUpdateData?.participantsUpdated) {
-      setParticipants(participantsUpdateData.participantsUpdated);
-    }
-  }, [participantsUpdateData]);
 
   if (roomLoading || queueLoading) return <p className="text-white">Loading...</p>;
   if (roomError) return <p className="text-red-500">Error: {roomError.message}</p>;
@@ -99,7 +99,7 @@ export default function RoomPage() {
           <p>Code: <span className="font-mono text-green-300">{room.room_code}</span></p>
         </div>
       </div>
-
+      
       <div className="flex flex-1">
         <div className="flex-1 p-6">
           <h2 className="text-xl font-bold mb-4 text-green-400">YouTube Player</h2>
@@ -115,20 +115,20 @@ export default function RoomPage() {
           ) : (
             <p>No video playing. Search and add videos!</p>
           )}
-
           <YouTubeSearch roomCode={roomCode} />
-
+          
           <div className="mt-6">
             <h3 className="text-lg font-bold">Queue</h3>
             <ul className="list-disc ml-6">
               {songQueue.map((song, idx) => (
                 <li key={song.id} className={idx === currentIndex ? "text-green-400" : ""}>
-                  {song.title} <span className="ml-12"> added by</span>  {song.added_by.name}
+                  {song.title} <span className="ml-12"> added by</span> {song.added_by.name}
                 </li>
               ))}
             </ul>
           </div>
         </div>
+        
         <div className="w-80 bg-[#1e1e1e] p-6 border-l border-green-700">
           <h2 className="text-xl font-bold mb-4 text-green-400">Participants ({participants.length})</h2>
           <ul className="space-y-2">
@@ -141,7 +141,7 @@ export default function RoomPage() {
           </ul>
         </div>
       </div>
-
+      
       <div className="p-6">
         <button onClick={handleLeave} className="bg-red-600 px-6 py-3 rounded-lg font-bold hover:bg-red-700">
           Leave Room
