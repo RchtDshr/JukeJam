@@ -14,14 +14,14 @@ const extractVideoId = (url) => {
 export default function Queue({ songQueue }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [removeSongMutation] = useMutation(REMOVE_SONG_FROM_QUEUE);
-const roomCode = localStorage.getItem("roomCode");
+  const roomCode = localStorage.getItem("roomCode");
   const handleRemoveSong = async (songId) => {
     try {
       await removeSongMutation({
         variables: { roomCode, songId },
       });
       toast.success("Song removed from queue");
-    //   refetchQueue(); // Optional: Refetch queue if not using subscriptions
+      //   refetchQueue(); // Optional: Refetch queue if not using subscriptions
     } catch (err) {
       console.error(err);
       toast.error("Failed to remove song");
@@ -33,11 +33,22 @@ const roomCode = localStorage.getItem("roomCode");
   }, [songQueue]);
 
   const handleVideoEnd = () => {
-    if (currentIndex + 1 < songQueue.length) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      toast("Queue finished.");
-    }
+    setCurrentIndex((prevIndex) => {
+      const nextIndex = prevIndex + 1;
+      if (nextIndex < songQueue.length) {
+        return nextIndex;
+      } else {
+        toast("Queue finished.");
+        return prevIndex; // stay on the last song
+      }
+    });
+  };
+  const playerOptions = {
+    width: "100%",
+    height: "500",
+    playerVars: {
+      autoplay: 1, // Ensures the next video starts playing
+    },
   };
 
   return (
@@ -47,7 +58,7 @@ const roomCode = localStorage.getItem("roomCode");
         <>
           <YouTube
             videoId={extractVideoId(songQueue[currentIndex].youtube_url)}
-            opts={{ width: "100%", height: "500" }}
+            opts={playerOptions}
             onEnd={handleVideoEnd}
           />
           <p className="mt-2 text-lg">{songQueue[currentIndex].title}</p>
