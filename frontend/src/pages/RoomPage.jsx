@@ -4,10 +4,6 @@ import { useQuery, useMutation } from "@apollo/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
   Music,
-  Users,
-  Clock,
-  Search,
-  X,
   LogOut,
   Home,
 } from "lucide-react";
@@ -15,14 +11,11 @@ import {
 import { GET_ROOM } from "../graphql/queries";
 import { LEAVE_ROOM } from "../graphql/mutations";
 import Queue from "../components/Queue";
-import Participants from "../components/Participants";
-import YouTubeSearch from "../components/YoutubeSearch";
+import SidePanel from "../components/SidePanel";
 
 export default function RoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("queue");
-  const [showSearch, setShowSearch] = useState(false);
   const participantId = localStorage.getItem("participantId");
 
   const { loading, error, data } = useQuery(GET_ROOM, {
@@ -30,7 +23,6 @@ export default function RoomPage() {
   });
 
   const [leaveRoom] = useMutation(LEAVE_ROOM);
-
   const [participants, setParticipants] = useState([]);
 
   useEffect(() => {
@@ -109,89 +101,22 @@ export default function RoomPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto p-6">
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-5 gap-6">
           {/* Queue Column */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <Queue />
           </div>
 
           {/* Side Panel */}
-          <div className="lg:col-span-1">
-            <div className="bg-zinc-900 border border-green-800 rounded-xl overflow-hidden">
-              {/* Tabs */}
-              <div className="flex border-b border-green-800">
-                <button
-                  onClick={() => setActiveTab("queue")}
-                  className={`flex-1 px-6 py-4 font-semibold flex items-center justify-center gap-2 ${
-                    activeTab === "queue"
-                      ? "bg-zinc-800 text-green-300 border-b-2 border-green-500"
-                      : "hover:bg-zinc-800 text-green-400"
-                  }`}
-                >
-                  <Clock size={18} />
-                  Add Songs
-                </button>
-                <button
-                  onClick={() => setActiveTab("participants")}
-                  className={`flex-1 px-6 py-4 font-semibold flex items-center justify-center gap-2 ${
-                    activeTab === "participants"
-                      ? "bg-zinc-800 text-green-300 border-b-2 border-green-500"
-                      : "hover:bg-zinc-800 text-green-400"
-                  }`}
-                >
-                  <Users size={18} />
-                  People ({participants?.length || 0})
-                </button>
-              </div>
-
-              {/* Tab Content */}
-              <div className="p-6">
-                {activeTab === "queue" && (
-                  <div className="space-y-4">
-                    <button
-                      onClick={() => setShowSearch(!showSearch)}
-                      className="w-full bg-green-700 hover:bg-green-800 text-white py-3 px-4 rounded-md font-semibold flex items-center justify-center gap-2"
-                    >
-                      {showSearch ? <X size={18} /> : <Search size={18} />}
-                      {showSearch ? "Close Search" : "Add Songs"}
-                    </button>
-
-                    {showSearch && (
-                      <div className="bg-zinc-800 border border-green-700 rounded-md p-4">
-                        <YouTubeSearch
-                          roomCode={roomCode}
-                          onSongAdded={() => {
-                            setShowSearch(false);
-                            toast.success("Song added to queue!");
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === "participants" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-white">
-                        Room Members
-                      </h3>
-                      <span className="bg-zinc-800 text-green-300 px-3 py-1 rounded-full text-sm border border-green-600">
-                        {participants?.length || 0} online
-                      </span>
-                    </div>
-                    <Participants
-                      roomCode={roomCode}
-                      participantId={participantId}
-                      initialParticipants={room.members}
-                      participants={participants}
-                      setParticipants={setParticipants}
-                      roomAdminId={room.admin_id.id}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="lg:col-span-2">
+            <SidePanel
+              roomCode={roomCode}
+              participantId={participantId}
+              participants={participants}
+              setParticipants={setParticipants}
+              roomAdminId={room.admin_id.id}
+              initialParticipants={room.members}
+            />
           </div>
         </div>
       </div>

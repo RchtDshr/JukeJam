@@ -185,20 +185,7 @@ export default function Participants({
                      
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Voice Status (placeholder for future voice chat) */}
-                      <button className="w-8 h-8 bg-gray-700/50 hover:bg-gray-600 rounded-lg flex items-center justify-center transition-colors">
-                        <Mic size={14} className="text-gray-400" />
-                      </button>
-                      
-                      {/* More Options */}
-                      {!isCurrentUser && (
-                        <button className="w-8 h-8 bg-gray-700/50 hover:bg-gray-600 rounded-lg flex items-center justify-center transition-colors">
-                          <MoreVertical size={14} className="text-gray-400" />
-                        </button>
-                      )}
-                    </div>
+                    
                   </div>
 
                   {/* Admin Actions Overlay */}

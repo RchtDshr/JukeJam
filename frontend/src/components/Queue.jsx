@@ -143,7 +143,7 @@ export default function Queue() {
             songQueue.map((song, index) => (
               <div
                 key={song.id}
-                className="group p-3 rounded-md bg-zinc-800 border border-green-700 hover:border-green-500 transition-all"
+                className="group p-4 rounded-lg py-6 bg-zinc-800 border border-green-700 hover:border-green-500 transition-all"
               >
                 <div className="mb-2 flex items-start gap-2">
                   {/* Queue Number */}
