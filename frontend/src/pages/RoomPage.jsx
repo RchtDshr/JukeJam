@@ -251,36 +251,37 @@ export default function RoomPage() {
                         songQueue.map((song, index) => (
                           <div
                             key={song.id}
-                            className="group relative p-3 rounded-md bg-zinc-800 border border-green-700 hover:border-green-500 transition-all"
+                            className="group p-3 rounded-md bg-zinc-800 border border-green-700 hover:border-green-500 transition-all"
                           >
-                            <div className="absolute -top-2 -left-2 w-5 h-5 bg-green-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                              {index + 1}
+                            <div className="mb-2 flex items-start gap-2">
+                              {/* Queue Number */}
+                              <div className="min-w-[24px] h-[24px] bg-green-600 text-white text-xs rounded-full flex items-center justify-center font-bold mt-1">
+                                {index + 1}
+                              </div>
+
+                              {/* Song Info */}
+                              <div className="flex-1">
+                                <h4 className="font-medium text-sm text-white mb-1 line-clamp-2">
+                                  {song.title}
+                                </h4>
+                                <p className="text-xs text-green-400 flex items-center">
+                                  <Users size={10} className="mr-1" />
+                                  {song.added_by?.name || "Unknown"}
+                                </p>
+                              </div>
                             </div>
 
-                            <div className="mb-2">
-                              <h4 className="font-medium text-sm text-white mb-1 line-clamp-2">
-                                {song.title}
-                              </h4>
-                              <p className="text-xs text-green-400 flex items-center">
-                                <Users size={10} className="mr-1" />
-                                {song.added_by?.name || "Unknown"}
-                              </p>
-                            </div>
-
+                            {/* Actions */}
                             <div className="flex gap-1">
                               <button
-                                onClick={() =>
-                                  handlePlayNow && handlePlayNow(song.id)
-                                }
+                                onClick={() => handlePlayNow?.(song.id)}
                                 className="flex-1 bg-green-700 hover:bg-green-800 text-white text-xs py-1.5 px-2 rounded-md flex items-center justify-center gap-1"
                               >
                                 <Play size={10} />
                                 Play
                               </button>
                               <button
-                                onClick={() =>
-                                  handleRemoveSong && handleRemoveSong(song.id)
-                                }
+                                onClick={() => handleRemoveSong?.(song.id)}
                                 className="w-8 bg-red-700 hover:bg-red-800 text-white text-xs py-1.5 px-2 rounded-md flex items-center justify-center"
                               >
                                 <Trash2 size={10} />
@@ -322,6 +323,7 @@ export default function RoomPage() {
                       initialParticipants={room.members}
                       participants={participants}
                       setParticipants={setParticipants}
+                      roomAdminId={room.admin_id.id}
                     />
                   </div>
                 )}
