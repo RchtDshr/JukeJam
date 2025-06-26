@@ -60,6 +60,7 @@ export default function Queue() {
     variables: { roomCode },
     onData: ({ data }) => {
       const updatedQueue = data.data?.songQueueUpdated;
+      console.log("📡 songQueueUpdated fired:", updatedQueue);
       if (updatedQueue) {
         setSongQueue(updatedQueue);
       }
@@ -70,33 +71,6 @@ export default function Queue() {
     getCurrentSong();
     getQueue();
   }, []);
-
-  const handleRemoveSong = async (songId) => {
-    try {
-      await removeSongMutation({
-        variables: { roomCode, songId },
-      });
-      toast.success("Song removed from queue");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to remove song");
-    }
-  };
-
-  const handlePlayNow = async (songId) => {
-    try {
-      await setCurrentSongMutation({
-        variables: {
-          roomCode,
-          songId,
-        },
-      });
-      toast.success("Playing song now for everyone!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to play song");
-    }
-  };
 
   const handleVideoEnd = async () => {
     if (!currentSong) return;
@@ -119,6 +93,8 @@ export default function Queue() {
             songId: currentSong.id,
           },
         });
+
+        getQueue();
       } else {
         toast("Queue finished.");
       }

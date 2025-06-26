@@ -48,6 +48,12 @@ export default function RoomPage() {
   const { data: subscriptionData } = useSubscription(SONG_QUEUE_UPDATED, {
     variables: { roomCode },
   });
+const [songQueue, setSongQueue] = useState([]);
+useEffect(() => {
+  if (queueData?.getSongQueue) {
+    setSongQueue(queueData.getSongQueue);
+  }
+}, [queueData]);
 
   const [leaveRoom] = useMutation(LEAVE_ROOM);
   const participantId = localStorage.getItem("participantId");
@@ -143,7 +149,7 @@ export default function RoomPage() {
     );
 
   const room = roomData.getRoom;
-  const songQueue = queueData.getSongQueue;
+  // const songQueue = queueData.getSongQueue;
 
   return (
     <div className="min-h-screen bg-black/90 text-green-200">

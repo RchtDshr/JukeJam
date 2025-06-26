@@ -102,6 +102,8 @@ async function setCurrentSong(roomId, songId) {
       },
     });
 
+    // Notify clients about the updated queue
+    await notifySongQueueUpdated(roomId);
     return song;
   } catch (err) {
     console.error("❌ Error in setCurrentSong resolver:", err);
