@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Clock, Users } from "lucide-react";
-import QueueTab from "./QueueTab";
+import SearchSongsTab from "./SearchSongsTab";
 import ParticipantsTab from "./ParticipantsTab";
 
 export default function SidePanel({ 
@@ -44,7 +44,7 @@ export default function SidePanel({
       {/* Tab Content */}
       <div className="p-6">
         {activeTab === "queue" && (
-          <QueueTab roomCode={roomCode} />
+          <SearchSongsTab roomCode={roomCode} />
         )}
 
         {activeTab === "participants" && (

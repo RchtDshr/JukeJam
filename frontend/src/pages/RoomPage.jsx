@@ -10,7 +10,7 @@ import {
 
 import { GET_ROOM } from "../graphql/queries";
 import { LEAVE_ROOM } from "../graphql/mutations";
-import Queue from "../components/Queue";
+import QueuePlayer from "../components/QueuePlayer";
 import SidePanel from "./SidePanel";
 
 export default function RoomPage() {
@@ -104,7 +104,7 @@ export default function RoomPage() {
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Queue Column */}
           <div className="lg:col-span-3">
-            <Queue />
+            <QueuePlayer />
           </div>
 
           {/* Side Panel */}

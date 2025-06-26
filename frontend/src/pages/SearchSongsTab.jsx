@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast";
 import { Search, X } from "lucide-react";
 import YouTubeSearch from "../components/YouTubeSearch";
 
-export default function QueueTab({ roomCode }) {
+export default function SearchSongsTab({ roomCode }) {
   const [showSearch, setShowSearch] = useState(false);
 
   return (

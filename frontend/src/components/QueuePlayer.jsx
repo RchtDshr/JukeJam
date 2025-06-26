@@ -12,7 +12,7 @@ const extractVideoId = (url) => {
   return urlObj.searchParams.get("v");
 };
 
-export default function Queue() {
+export default function QueuePlayer() {
   const roomCode = localStorage.getItem("roomCode");
   const [currentSong, setCurrentSong] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
