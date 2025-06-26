@@ -11,7 +11,7 @@ import {
 import { GET_ROOM } from "../graphql/queries";
 import { LEAVE_ROOM } from "../graphql/mutations";
 import Queue from "../components/Queue";
-import SidePanel from "../components/SidePanel";
+import SidePanel from "./SidePanel";
 
 export default function RoomPage() {
   const { roomCode } = useParams();

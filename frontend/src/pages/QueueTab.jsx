@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { Search, X } from "lucide-react";
-import YouTubeSearch from "./YouTubeSearch";
+import YouTubeSearch from "../components/YouTubeSearch";
 
 export default function QueueTab({ roomCode }) {
   const [showSearch, setShowSearch] = useState(false);

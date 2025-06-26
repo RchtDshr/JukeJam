@@ -1,4 +1,4 @@
-import Participants from "./Participants";
+import Participants from "../components/Participants";
 
 export default function ParticipantsTab({
   roomCode,
