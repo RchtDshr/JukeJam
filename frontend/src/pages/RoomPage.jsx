@@ -104,7 +104,7 @@ export default function RoomPage() {
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Queue Column */}
           <div className="lg:col-span-3">
-            <QueuePlayer />
+            <QueuePlayer roomAdminId={room.admin_id.id}/>
           </div>
 
           {/* Side Panel */}

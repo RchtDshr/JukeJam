@@ -12,7 +12,7 @@ const extractVideoId = (url) => {
   return urlObj.searchParams.get("v");
 };
 
-export default function QueuePlayer() {
+export default function QueuePlayer({roomAdminId}) {
   const roomCode = localStorage.getItem("roomCode");
   const [currentSong, setCurrentSong] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
@@ -26,7 +26,11 @@ export default function QueuePlayer() {
       }
     },
   });
-
+  const participantId = localStorage.getItem("participantId");
+  const isAdmin = participantId === roomAdminId;
+  console.log("isAdmin", isAdmin);
+  console.log("roomAdminId", roomAdminId);
+  console.log("participantId", participantId);
   const [getQueue] = useLazyQuery(GET_SONG_QUEUE, {
     variables: { roomCode },
     fetchPolicy: "network-only",
@@ -107,6 +111,7 @@ export default function QueuePlayer() {
       autoplay: 1,
       rel: 0,
       modestbranding: 1,
+      controls: isAdmin ? 1 : 0,
     },
   };
 
