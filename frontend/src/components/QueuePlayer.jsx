@@ -28,9 +28,7 @@ export default function QueuePlayer({roomAdminId}) {
   });
   const participantId = localStorage.getItem("participantId");
   const isAdmin = participantId === roomAdminId;
-  console.log("isAdmin", isAdmin);
-  console.log("roomAdminId", roomAdminId);
-  console.log("participantId", participantId);
+ 
   const [getQueue] = useLazyQuery(GET_SONG_QUEUE, {
     variables: { roomCode },
     fetchPolicy: "network-only",

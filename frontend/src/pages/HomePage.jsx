@@ -51,7 +51,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#121212] text-white p-8">
       <Toaster />
-      <Test/>
+      {/* <Test/> */}
       <div className="flex flex-col items-center mb-12">
         <div className="flex items-center gap-3 mb-4">
           <FaMusic className="text-green-500 text-4xl" />

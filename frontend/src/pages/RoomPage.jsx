@@ -18,7 +18,7 @@ export default function RoomPage() {
   const navigate = useNavigate();
   const participantId = localStorage.getItem("participantId");
 
-  const { loading, error, data } = useQuery(GET_ROOM, {
+  const { loading, error, data, refetch } = useQuery(GET_ROOM, {
     variables: { roomCode },
   });
 
@@ -27,9 +27,25 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (data?.getRoom?.members) {
+      console.log("🔵 Room members from GET_ROOM:", data.getRoom.members);
+      console.log("🔍 Current user in room members:", data.getRoom.members.some(m => m.id === participantId));
       setParticipants(data.getRoom.members);
     }
-  }, [data]);
+  }, [data, participantId]);
+
+  // Refetch room data after a short delay to ensure we're included
+  useEffect(() => {
+    if (data?.getRoom && participantId) {
+      const currentUserInRoom = data.getRoom.members.some(m => m.id === participantId);
+      if (!currentUserInRoom) {
+        console.log("⚠️ Current user not in room members, refetching...");
+        // Refetch after a short delay to allow backend to process
+        setTimeout(() => {
+          refetch();
+        }, 1000);
+      }
+    }
+  }, [data, participantId, refetch]);
 
   const handleLeave = async () => {
     try {

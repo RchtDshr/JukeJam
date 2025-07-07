@@ -20,10 +20,32 @@ export default function Participants({
   // Initialize participants on mount
   useEffect(() => {
     if (initialParticipants) {
+      console.log("🔵 Initial participants:", initialParticipants);
+      console.log("🔍 Current user in initial participants:", initialParticipants.some(p => p.id === participantId));
       setParticipants(initialParticipants);
       
+      // If current user is not in initial participants, log this issue
+      if (participantId && !initialParticipants.some(p => p.id === participantId)) {
+        console.log("⚠️ Current user not in initial participants - this suggests a timing issue");
+        console.log("🔍 This means GET_ROOM was called before user joined the room");
+      }
     }
-  }, [initialParticipants, setParticipants]);
+  }, [initialParticipants, setParticipants, participantId]);
+
+  // Add effect to ensure current user is always in the list
+  useEffect(() => {
+    // If we have a participantId but current user is not in the participants list,
+    // we need to add them (this handles the case where backend doesn't include current user)
+    if (participantId && participants.length > 0) {
+      const currentUserExists = participants.some(p => p.id === participantId);
+      if (!currentUserExists) {
+        console.log("⚠️ Current user missing from participants list, this shouldn't happen");
+        console.log("🔍 Current participants:", participants);
+        console.log("🔍 Current user ID:", participantId);
+        // We can't add the user without their data, so this indicates a backend issue
+      }
+    }
+  }, [participants, participantId]);
 
   // New participant joined
   useSubscription(PARTICIPANT_JOINED, {
@@ -31,15 +53,31 @@ export default function Participants({
     onSubscriptionData: ({ subscriptionData }) => {
       const newParticipant = subscriptionData.data?.participantJoined;
       if (newParticipant) {
-        toast.success(`${newParticipant.name} joined!`, {
-          icon: '👋',
-          style: {
-            background: '#065f46',
-            color: '#ffffff',
-            border: '1px solid #10b981'
+        console.log("🔵 PARTICIPANT_JOINED:", newParticipant, "Current user ID:", participantId);
+        
+        // Update participants state - this was missing!
+        setParticipants(prev => {
+          // Check if participant already exists to avoid duplicates
+          const exists = prev.some(p => p.id === newParticipant.id);
+          if (!exists) {
+            console.log("➕ Adding participant to list:", newParticipant.name);
+            return [...prev, newParticipant];
           }
+          console.log("⚠️ Participant already exists, not adding:", newParticipant.name);
+          return prev;
         });
-       
+
+        // Only show toast for other participants, not yourself
+        if (newParticipant.id !== participantId) {
+          toast.success(`${newParticipant.name} joined!`, {
+            icon: '👋',
+            style: {
+              background: '#065f46',
+              color: '#ffffff',
+              border: '1px solid #10b981'
+            }
+          });
+        }
       }
     },
   });
@@ -49,16 +87,21 @@ export default function Participants({
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
       const leftParticipant = subscriptionData.data?.participantLeft;
-      if (leftParticipant?.id !== participantId) {
-        toast.success(`${leftParticipant.name} left the room.`, {
-          icon: '👋',
-          style: {
-            background: '#7f1d1d',
-            color: '#ffffff',
-            border: '1px solid #ef4444'
-          }
-        });
-       
+      if (leftParticipant) {
+        // Update participants state - remove the participant who left
+        setParticipants(prev => prev.filter(p => p.id !== leftParticipant.id));
+
+        // Only show toast for other participants, not yourself
+        if (leftParticipant.id !== participantId) {
+          toast.success(`${leftParticipant.name} left the room.`, {
+            icon: '👋',
+            style: {
+              background: '#7f1d1d',
+              color: '#ffffff',
+              border: '1px solid #ef4444'
+            }
+          });
+        }
       }
     },
   });
@@ -70,9 +113,30 @@ export default function Participants({
       const updated = subscriptionData.data?.participantsUpdated;
       if (updated) {
         console.log("👥 Participants updated:", updated);
-        setParticipants(updated);
+        console.log("🔍 Current user ID:", participantId);
+        console.log("🔍 Current user in updated list:", updated.some(p => p.id === participantId));
         
-       
+        // Check if current user is in the updated list
+        const currentUserInList = updated.some(p => p.id === participantId);
+        
+        if (currentUserInList) {
+          // If current user is in the list, use the updated list
+          console.log("✅ Current user found in updated list, using it");
+          setParticipants(updated);
+        } else {
+          // If current user is missing, preserve them in the list
+          console.log("⚠️ Current user missing from updated list, preserving");
+          setParticipants(prev => {
+            const currentUser = prev.find(p => p.id === participantId);
+            if (currentUser) {
+              console.log("👤 Preserving current user:", currentUser.name);
+              // Add current user to the updated list
+              return [...updated, currentUser];
+            }
+            console.log("❌ Current user not found in previous list either");
+            return updated;
+          });
+        }
       }
     },
   });
@@ -107,7 +171,6 @@ export default function Participants({
     // Current user second
     if (a.id === participantId) return -1;
     if (b.id === participantId) return 1;
-   
     
     // Alphabetical by name
     return a.name.localeCompare(b.name);
@@ -124,7 +187,6 @@ export default function Participants({
             </div>
             <h3 className="text-lg font-bold text-white">Participants</h3>
           </div>
-          
         </div>
       </div>
 
@@ -153,8 +215,6 @@ export default function Participants({
                       <div className={`w-12 h-12 bg-gradient-to-r ${avatarColor} rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg`}>
                         {getInitials(participant.name)}
                       </div>
-                      
-                   
                     </div>
 
                     {/* User Info */}
@@ -181,11 +241,7 @@ export default function Participants({
                           )}
                         </div>
                       </div>
-                      
-                     
                     </div>
-
-                    
                   </div>
 
                   {/* Admin Actions Overlay */}
@@ -213,7 +269,6 @@ export default function Participants({
       <div className="border-t border-green-500/20 p-4 bg-black/20">
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-4">
-          
             <span className="text-gray-400">
               {participants.length} total
             </span>
