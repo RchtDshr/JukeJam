@@ -1,38 +1,19 @@
-export function createSyncWS(roomId, onSyncReceived) {
+export function createSyncWS(roomCode, userId, onSyncReceived) {
   let ws = null;
   let reconnectTimeout = null;
   let isConnected = false;
   let reconnectAttempts = 0;
   const maxReconnectAttempts = 3;
 
-  async function testHttpConnection() {
-    try {
-      console.log('Testing HTTP connection to backend...');
-      const response = await fetch('http://localhost:4000/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: '{ __typename }' })
-      });
-      console.log('✅ HTTP connection successful:', response.status);
-      return true;
-    } catch (error) {
-      console.error('❌ HTTP connection failed:', error);
-      return false;
-    }
-  }
+  const wsUrl = 'ws://localhost:3000';
 
   function connect() {
-    const wsUrl = 'ws://localhost:4000/sync';
-    
     console.log('=== WebSocket Connection Attempt ===');
     console.log('URL:', wsUrl);
     console.log('Attempt:', reconnectAttempts + 1);
-    
+
     try {
       ws = new WebSocket(wsUrl);
-      
-      console.log('WebSocket created, readyState:', ws.readyState);
-      console.log('0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED');
 
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
@@ -46,105 +27,92 @@ export function createSyncWS(roomId, onSyncReceived) {
         clearTimeout(connectionTimeout);
         isConnected = true;
         reconnectAttempts = 0;
-        
-        const joinMessage = JSON.stringify({ type: 'join', roomId });
-        console.log('Sending join message:', joinMessage);
-        ws.send(joinMessage);
+
+        // Send JOIN_ROOM message to backend
+        const joinMessage = {
+          type: 'JOIN_ROOM',
+          roomCode,
+          userId,
+        };
+        console.log('📤 Sending JOIN_ROOM message:', joinMessage);
+        ws.send(JSON.stringify(joinMessage));
       });
 
       ws.addEventListener('message', (event) => {
         console.log('📨 Received message:', event.data);
         try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'sync') {
-            onSyncReceived(data.payload);
-          } else if (data.type === 'joined') {
-            console.log(`✅ Successfully joined room: ${data.roomId}`);
+          const message = JSON.parse(event.data);
+
+          if (message.type === 'PLAYBACK_UPDATE' && message.roomCode === roomCode) {
+            console.log('🎬 Playback sync received:', message.data);
+            onSyncReceived(message.data); // { action, currentTime }
           }
         } catch (error) {
-          console.error('❌ Error parsing message:', error);
+          console.error('❌ Error parsing WebSocket message:', error);
         }
       });
 
       ws.addEventListener('close', (event) => {
-        console.log('=== WebSocket CLOSED ===');
-        console.log('Code:', event.code);
-        console.log('Reason:', event.reason);
-        console.log('Was clean:', event.wasClean);
-        
-        // Common close codes:
-        // 1000 = Normal closure
-        // 1006 = Abnormal closure (no close frame received)
-        // 1011 = Server error
-        // 1012 = Service restart
-        
+        console.warn('=== WebSocket CLOSED ===');
+        console.warn('Code:', event.code, 'Reason:', event.reason, 'Clean:', event.wasClean);
         clearTimeout(connectionTimeout);
         isConnected = false;
-        
+
         if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
-          const delay = 2000; // Fixed 2 second delay for debugging
+          const delay = 2000;
           console.log(`⏳ Reconnecting in ${delay}ms... (${reconnectAttempts + 1}/${maxReconnectAttempts})`);
-          
           reconnectTimeout = setTimeout(() => {
             reconnectAttempts++;
             connect();
           }, delay);
-        } else if (reconnectAttempts >= maxReconnectAttempts) {
-          console.log('❌ Max reconnection attempts reached');
+        } else {
+          console.warn('❌ Max reconnection attempts reached or closed normally');
         }
       });
 
       ws.addEventListener('error', (error) => {
-        console.log('=== WebSocket ERROR ===');
-        console.log('Error event:', error);
-        console.log('WebSocket state:', ws.readyState);
+        console.error('=== WebSocket ERROR ===');
+        console.error(error);
         clearTimeout(connectionTimeout);
         isConnected = false;
       });
 
     } catch (error) {
-      console.error('❌ Failed to create WebSocket:', error);
+      console.error('❌ WebSocket connection failed:', error);
     }
   }
 
-  // Test HTTP connection first, then try WebSocket
-  testHttpConnection().then((httpWorks) => {
-    if (httpWorks) {
-      console.log('HTTP works, attempting WebSocket...');
-      connect();
-    } else {
-      console.log('❌ HTTP doesn\'t work, WebSocket will likely fail too');
-      console.log('Check if backend is running and ports are correctly mapped');
-    }
-  });
+  // Directly connect without HTTP test (optional: remove HTTP check)
+  connect();
 
   return {
-    sendSync: (payload) => {
+    sendSync: (action, currentTime) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        const message = JSON.stringify({ type: 'sync', payload });
-        console.log('📤 Sending sync:', message);
-        ws.send(message);
+        const syncMessage = {
+          type: 'PLAYBACK_UPDATE',
+          roomCode,
+          action,
+          currentTime,
+        };
+        console.log('📤 Sending PLAYBACK_UPDATE:', syncMessage);
+        ws.send(JSON.stringify(syncMessage));
       } else {
-        console.warn('❌ Cannot send sync - WebSocket not connected (state: ' + (ws ? ws.readyState : 'null') + ')');
+        console.warn('❌ Cannot send sync - WebSocket not connected');
       }
     },
-    
+
     close: () => {
       console.log('🔌 Manually closing WebSocket');
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      if (ws) {
-        ws.close(1000, 'Manual close');
-      }
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close(1000, 'Manual close');
     },
-    
+
     isConnected: () => isConnected,
-    
+
     getState: () => ({
       connected: isConnected,
       readyState: ws ? ws.readyState : null,
       url: ws ? ws.url : null
-    })
+    }),
   };
 }

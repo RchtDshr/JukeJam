@@ -20,15 +20,8 @@ export default function Participants({
   // Initialize participants on mount
   useEffect(() => {
     if (initialParticipants) {
-      console.log("🔵 Initial participants:", initialParticipants);
-      console.log("🔍 Current user in initial participants:", initialParticipants.some(p => p.id === participantId));
-      setParticipants(initialParticipants);
+     setParticipants(initialParticipants);
       
-      // If current user is not in initial participants, log this issue
-      if (participantId && !initialParticipants.some(p => p.id === participantId)) {
-        console.log("⚠️ Current user not in initial participants - this suggests a timing issue");
-        console.log("🔍 This means GET_ROOM was called before user joined the room");
-      }
     }
   }, [initialParticipants, setParticipants, participantId]);
 
@@ -38,12 +31,7 @@ export default function Participants({
     // we need to add them (this handles the case where backend doesn't include current user)
     if (participantId && participants.length > 0) {
       const currentUserExists = participants.some(p => p.id === participantId);
-      if (!currentUserExists) {
-        console.log("⚠️ Current user missing from participants list, this shouldn't happen");
-        console.log("🔍 Current participants:", participants);
-        console.log("🔍 Current user ID:", participantId);
-        // We can't add the user without their data, so this indicates a backend issue
-      }
+      
     }
   }, [participants, participantId]);
 
@@ -53,17 +41,14 @@ export default function Participants({
     onSubscriptionData: ({ subscriptionData }) => {
       const newParticipant = subscriptionData.data?.participantJoined;
       if (newParticipant) {
-        console.log("🔵 PARTICIPANT_JOINED:", newParticipant, "Current user ID:", participantId);
         
         // Update participants state - this was missing!
         setParticipants(prev => {
           // Check if participant already exists to avoid duplicates
           const exists = prev.some(p => p.id === newParticipant.id);
           if (!exists) {
-            console.log("➕ Adding participant to list:", newParticipant.name);
             return [...prev, newParticipant];
           }
-          console.log("⚠️ Participant already exists, not adding:", newParticipant.name);
           return prev;
         });
 
@@ -112,28 +97,24 @@ export default function Participants({
     onSubscriptionData: ({ subscriptionData }) => {
       const updated = subscriptionData.data?.participantsUpdated;
       if (updated) {
-        console.log("👥 Participants updated:", updated);
-        console.log("🔍 Current user ID:", participantId);
-        console.log("🔍 Current user in updated list:", updated.some(p => p.id === participantId));
+        
         
         // Check if current user is in the updated list
         const currentUserInList = updated.some(p => p.id === participantId);
         
         if (currentUserInList) {
           // If current user is in the list, use the updated list
-          console.log("✅ Current user found in updated list, using it");
           setParticipants(updated);
         } else {
           // If current user is missing, preserve them in the list
-          console.log("⚠️ Current user missing from updated list, preserving");
+          
           setParticipants(prev => {
             const currentUser = prev.find(p => p.id === participantId);
             if (currentUser) {
-              console.log("👤 Preserving current user:", currentUser.name);
+              
               // Add current user to the updated list
               return [...updated, currentUser];
             }
-            console.log("❌ Current user not found in previous list either");
             return updated;
           });
         }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast, Toaster } from "react-hot-toast";
@@ -12,6 +12,7 @@ import { GET_ROOM } from "../graphql/queries";
 import { LEAVE_ROOM } from "../graphql/mutations";
 import QueuePlayer from "../components/QueuePlayer";
 import SidePanel from "./SidePanel";
+import { createSyncWS } from "../websocket/sync"; // ✅ Add this
 
 export default function RoomPage() {
   const { roomCode } = useParams();
@@ -24,6 +25,26 @@ export default function RoomPage() {
 
   const [leaveRoom] = useMutation(LEAVE_ROOM);
   const [participants, setParticipants] = useState([]);
+  const syncRef = useRef(null); // ✅ For WebSocket instance
+
+  // ✅ Handler for incoming sync (to be passed down)
+  const handleSyncReceived = ({ action, currentTime }) => {
+    console.log("🎯 Received sync in RoomPage:", action, currentTime);
+    // Let QueuePlayer use this via props
+    if (syncRef.current?.onSyncHandler) {
+      syncRef.current.onSyncHandler(action, currentTime);
+    }
+  };
+
+  // ✅ Create WebSocket sync on mount
+  useEffect(() => {
+    if (roomCode && participantId) {
+      syncRef.current = createSyncWS(roomCode, participantId, handleSyncReceived);
+    }
+    return () => {
+      syncRef.current?.close();
+    };
+  }, [roomCode, participantId]);
 
   useEffect(() => {
     if (data?.getRoom?.members) {
@@ -120,7 +141,10 @@ export default function RoomPage() {
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Queue Column */}
           <div className="lg:col-span-3">
-            <QueuePlayer roomAdminId={room.admin_id.id}/>
+            <QueuePlayer
+              roomAdminId={room.admin_id.id}
+              sync={syncRef.current} // ✅ Pass sync object
+            />
           </div>
 
           {/* Side Panel */}
