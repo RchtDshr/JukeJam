@@ -1,14 +1,14 @@
 require('dotenv').config();
-const { createClient } = require('redis');
+const Redis = require('ioredis');
 
-const redis = createClient({
-  url: process.env.REDIS_URL
+const redis = new Redis(process.env.REDIS_URL);
+
+redis.on('connect', () => {
+  console.log('✅ ioredis connected');
 });
-redis.on('connect', () => console.log('✅ Redis connected'));
-redis.on('error', (err) => console.error('❌ Redis error:', err));
 
-(async () => {
-  await redis.connect();
-})();
+redis.on('error', (err) => {
+  console.error('❌ ioredis error:', err);
+});
 
 module.exports = redis;

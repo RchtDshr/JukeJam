@@ -1,4 +1,5 @@
 const pool = require('../db/postgres.js');
+const redis = require('../db/redis.js');
 const { v4: uuidv4 } = require('uuid');
 const pubsub = require('../graphql/pubsub/pubsub.js');
 
@@ -28,6 +29,9 @@ async function joinRoom(roomId, name) {
       'INSERT INTO room_members (participant_id, room_id, role) VALUES ($1, $2, $3)',
       [participant.id, roomId, 'member']
     );
+
+    // 🔌 Save participant to Redis
+    await redis.sadd(`room:${roomCode}:participants`, participant.id);
 
     // Publish the event with proper payload structure
     const payload = {
@@ -89,10 +93,15 @@ async function leaveRoom(roomId, participantId) {
     const wasAdmin = memberRes.rows[0].role === 'admin';
     // 4️⃣ Delete participant from room
     console.log("🔍 Deleting from room_members...");
-    const deleteResult = await client.query(
+    await client.query(
       'DELETE FROM room_members WHERE room_id = $1 AND participant_id = $2',
       [roomId, participantId]
     );
+
+    // 🔌 Remove from Redis set
+    await redis.srem(`room:${roomCode}:participants`, participant.id);
+
+
     // NOTE: We DON'T delete from participants table because:
     // 1. Their songs should continue to exist and play
     // 2. This would cause foreign key violations if their song is currently playing
@@ -116,6 +125,9 @@ async function leaveRoom(roomId, participantId) {
       // FINALLY: Delete the room
       console.log("🔍 Deleting room...");
       await client.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+
+      // 🧹 Clean up Redis for room
+      await redis.del(`room:${roomCode}:participants`);
     } else if (wasAdmin) {
       // Admin left: reassign admin
       const newAdminRes = await client.query(
@@ -152,6 +164,7 @@ async function leaveRoom(roomId, participantId) {
     client.release();
   }
 }
+
 async function getParticipantById(participantId) {
   const result = await pool.query('SELECT id, name, created_at FROM participants WHERE id = $1', [participantId]);
   return result.rows[0];
