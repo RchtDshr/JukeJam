@@ -81,28 +81,61 @@ export default function QueuePlayer({ roomAdminId }) {
       );
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = async (event) => {
       const message = JSON.parse(event.data);
 
-      if (!isPlayerReady || (message.type === "PLAYBACK_UPDATE" && !isAdmin)) {
+      if (message.type === "PLAYBACK_UPDATE") {
         const { action, currentTime } = message.data;
 
-        if (!playerRef.current || !playerRef.current.internalPlayer) return;
+        // Only non-admin users should respond to sync messages
+        if (isAdmin) {
+          console.log(
+            `[IGNORED - ADMIN] Action: ${action}, Time: ${currentTime}`
+          );
+          return;
+        }
+
+        if (!playerRef.current || !playerRef.current.internalPlayer) {
+          console.log("[SYNC ERROR] Player not ready");
+          return;
+        }
+        if (!isPlayerReady) {
+          console.log("[SYNC ERROR] Player not ready");
+          return;
+        }
 
         const yt = playerRef.current.internalPlayer;
 
-        if (!isAdmin) {
-          console.log(
-            `[RECEIVED - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
-          );
+        console.log(
+          `[SYNCING - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
+        );
+
+        // Temporarily disable state change events to prevent feedback loops
+        debounceRef.current = true;
+
+        try {
+          if (action === "PLAY") {
+            await yt.seekTo(currentTime, true);
+            await yt.playVideo();
+            console.log(`[SYNCED] Video played at ${currentTime}s`);
+          } else if (action === "PAUSE") {
+            await yt.seekTo(currentTime, true);
+            await yt.pauseVideo();
+            console.log(`[SYNCED] Video paused at ${currentTime}s`);
+          } else if (action === "SEEK") {
+            await yt.seekTo(currentTime, true);
+            console.log(`[SYNCED] Video seeked to ${currentTime}s`);
+          }
+        } catch (error) {
+          console.error("[SYNC ERROR]", error);
         }
 
-        if (action === "PLAY" && yt.playVideo) yt.playVideo();
-        if (action === "PAUSE" && yt.pauseVideo) yt.pauseVideo();
-        if (action === "SEEK" && yt.seekTo) yt.seekTo(currentTime, true);
+        // Re-enable state change events after a short delay
+        setTimeout(() => {
+          debounceRef.current = false;
+        }, 1000);
       }
     };
-
     return () => socket.close();
   }, []);
 
@@ -126,33 +159,31 @@ export default function QueuePlayer({ roomAdminId }) {
       })
     );
   };
+  useEffect(() => {
+    if (isAdmin && isPlayerReady && playerRef.current?.internalPlayer) {
+      playerRef.current.internalPlayer.getCurrentTime().then((currentTime) => {
+        console.log("[ADMIN] Sending forced sync on ready");
+        emitPlaybackUpdate("SEEK", currentTime);
+      });
+    }
+  }, [isPlayerReady]);
 
   // --- Player Events ---
   const onPlayerReady = (event) => {
     playerRef.current = event.target;
     setIsPlayerReady(true);
-    useEffect(() => {
-  if (isAdmin && isPlayerReady && playerRef.current?.internalPlayer) {
-    playerRef.current.internalPlayer
-      .getCurrentTime()
-      .then((currentTime) => {
-        console.log("[ADMIN] Sending forced sync on ready");
-        emitPlaybackUpdate("SEEK", currentTime);
-      });
-  }
-}, [isPlayerReady]);
 
     if (!isAdmin) {
       event.target.pauseVideo(); // wait for sync
     }
   };
 
-  const onStateChange = (event) => {
+  const onStateChange = async (event) => {
     const yt = event.target;
     if (!isAdmin || debounceRef.current) return;
 
     const playerState = yt.getPlayerState();
-    const currentTime = yt.getCurrentTime();
+    const currentTime = await yt.getCurrentTime(); // Make this async
 
     if (playerState === 1) emitPlaybackUpdate("PLAY", currentTime); // playing
     if (playerState === 2) emitPlaybackUpdate("PAUSE", currentTime); // paused
