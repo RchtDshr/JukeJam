@@ -3,7 +3,7 @@ const express = require('express');
 const http = require('http');
 const { ApolloServer } = require('apollo-server-express');
 const { makeExecutableSchema } = require('@graphql-tools/schema');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws');
 const { useServer } = require('graphql-ws/lib/use/ws');
 const Redis = require('ioredis');
 
@@ -21,8 +21,6 @@ const redisSub = new Redis(process.env.REDIS_URL || {
   retryStrategy: times => Math.min(times * 50, 2000),
 });
 
-// --- In-memory store of WebSocket clients (sync) ---
-const syncClients = new Map(); // Map<WebSocket, { roomCode, userId }>
 
 // --- Build GraphQL Schema ---
 const schema = makeExecutableSchema({ typeDefs, resolvers });
@@ -51,10 +49,12 @@ const server = new ApolloServer({
     },
   }],
 });
-
 // --- Additional WebSocket Server for Sync (raw WS) ---
-const syncWSS = new WebSocketServer({ port: 3000 }); // Optional: could be same port with path split
+const syncWSS = new WebSocketServer({ port: 3000 }); // Could optionally use the same port with path routing
 console.log('🎵 Sync Server running on ws://localhost:3000');
+
+// Map to track connected sync clients and their metadata
+const syncClients = new Map(); // socket -> { roomCode, userId }
 
 syncWSS.on('connection', socket => {
   console.log('🧠 [SYNC WS] Client connected');
@@ -63,27 +63,38 @@ syncWSS.on('connection', socket => {
     try {
       const parsed = JSON.parse(msg.toString());
 
-      if (parsed.type === 'JOIN_ROOM') {
-        const { roomCode, userId } = parsed;
-        syncClients.set(socket, { roomCode, userId });
-        await redis.sadd(`room:${roomCode}:participants`, userId);
-        console.log(`👥 User ${userId} joined room ${roomCode}`);
-        await redisSub.subscribe(PLAYBACK_CHANNEL);
-      }
+      switch (parsed.type) {
+        case 'JOIN_ROOM': {
+          const { roomCode, userId } = parsed;
+          syncClients.set(socket, { roomCode, userId });
 
-      if (parsed.type === 'PLAYBACK_UPDATE') {
-        const { roomCode, action, currentTime } = parsed;
-        const payload = JSON.stringify({
-          type: 'PLAYBACK_UPDATE',
-          roomCode,
-          data: {
-            action,
-            currentTime,
-            timestamp: Date.now(),
-          },
-        });
-        await redis.publish(PLAYBACK_CHANNEL, payload);
-        console.log(`🎬 Playback: "${action}" at ${currentTime}s in ${roomCode}`);
+          await redis.sadd(`room:${roomCode}:participants`, userId);
+          console.log(`👥 User ${userId} joined room ${roomCode}`);
+
+          await redisSub.subscribe(PLAYBACK_CHANNEL);
+          break;
+        }
+
+        case 'PLAYBACK_UPDATE': {
+          const { roomCode, action, currentTime } = parsed;
+
+          const payload = JSON.stringify({
+            type: 'PLAYBACK_UPDATE',
+            roomCode,
+            data: {
+              action,
+              currentTime,
+              timestamp: Date.now(),
+            },
+          });
+
+          await redis.publish(PLAYBACK_CHANNEL, payload);
+          console.log(`🎬 Playback: "${action}" at ${currentTime}s in ${roomCode}`);
+          break;
+        }
+
+        default:
+          console.warn('⚠️ Unknown message type:', parsed.type);
       }
     } catch (err) {
       console.error('❌ Invalid message on sync socket:', err);
@@ -101,7 +112,7 @@ syncWSS.on('connection', socket => {
   });
 });
 
-// --- Redis Subscriber to broadcast to room users ---
+// --- Redis Subscriber to broadcast playback sync updates to all clients in the room ---
 redisSub.on('message', (channel, message) => {
   if (channel !== PLAYBACK_CHANNEL) return;
 

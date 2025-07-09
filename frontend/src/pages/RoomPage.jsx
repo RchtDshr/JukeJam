@@ -29,7 +29,6 @@ export default function RoomPage() {
 
   // ✅ Handler for incoming sync (to be passed down)
   const handleSyncReceived = ({ action, currentTime }) => {
-    console.log("🎯 Received sync in RoomPage:", action, currentTime);
     // Let QueuePlayer use this via props
     if (syncRef.current?.onSyncHandler) {
       syncRef.current.onSyncHandler(action, currentTime);
@@ -48,8 +47,8 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (data?.getRoom?.members) {
-      console.log("🔵 Room members from GET_ROOM:", data.getRoom.members);
-      console.log("🔍 Current user in room members:", data.getRoom.members.some(m => m.id === participantId));
+      // console.log("🔵 Room members from GET_ROOM:", data.getRoom.members);
+      // console.log("🔍 Current user in room members:", data.getRoom.members.some(m => m.id === participantId));
       setParticipants(data.getRoom.members);
     }
   }, [data, participantId]);
@@ -59,7 +58,7 @@ export default function RoomPage() {
     if (data?.getRoom && participantId) {
       const currentUserInRoom = data.getRoom.members.some(m => m.id === participantId);
       if (!currentUserInRoom) {
-        console.log("⚠️ Current user not in room members, refetching...");
+        // console.log("⚠️ Current user not in room members, refetching...");
         // Refetch after a short delay to allow backend to process
         setTimeout(() => {
           refetch();

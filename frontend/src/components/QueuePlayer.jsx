@@ -1,21 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import YouTube from "react-youtube";
 import { toast } from "react-hot-toast";
 import { Play, Trash2, Users, Clock } from "lucide-react";
 import { useLazyQuery, useMutation, useSubscription } from "@apollo/client";
 import { REMOVE_SONG_FROM_QUEUE, SET_CURRENT_SONG } from "../graphql/mutations";
 import { GET_CURRENT_SONG, GET_SONG_QUEUE } from "../graphql/queries";
-import { CURRENT_SONG_CHANGED, SONG_QUEUE_UPDATED } from "../graphql/subscriptions";
+import {
+  CURRENT_SONG_CHANGED,
+  SONG_QUEUE_UPDATED,
+} from "../graphql/subscriptions";
 
 const extractVideoId = (url) => {
   const urlObj = new URL(url);
   return urlObj.searchParams.get("v");
 };
 
-export default function QueuePlayer({roomAdminId}) {
+export default function QueuePlayer({ roomAdminId }) {
   const roomCode = localStorage.getItem("roomCode");
+  const participantId = localStorage.getItem("participantId");
+  const isAdmin = participantId === roomAdminId;
+
   const [currentSong, setCurrentSong] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
+  const playerRef = useRef(null);
+  const socketRef = useRef(null);
+  const debounceRef = useRef(false);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
 
   const [getCurrentSong] = useLazyQuery(GET_CURRENT_SONG, {
     variables: { roomCode },
@@ -26,9 +36,7 @@ export default function QueuePlayer({roomAdminId}) {
       }
     },
   });
-  const participantId = localStorage.getItem("participantId");
-  const isAdmin = participantId === roomAdminId;
- 
+
   const [getQueue] = useLazyQuery(GET_SONG_QUEUE, {
     variables: { roomCode },
     fetchPolicy: "network-only",
@@ -58,10 +66,107 @@ export default function QueuePlayer({roomAdminId}) {
     },
   });
 
+  // --- WebSocket Connection ---
   useEffect(() => {
-    getCurrentSong();
-    getQueue();
+    const socket = new WebSocket("ws://localhost:3000");
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      socket.send(
+        JSON.stringify({
+          type: "JOIN_ROOM",
+          roomCode,
+          userId: participantId,
+        })
+      );
+    };
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      if (!isPlayerReady || (message.type === "PLAYBACK_UPDATE" && !isAdmin)) {
+        const { action, currentTime } = message.data;
+
+        if (!playerRef.current || !playerRef.current.internalPlayer) return;
+
+        const yt = playerRef.current.internalPlayer;
+
+        if (!isAdmin) {
+          console.log(
+            `[RECEIVED - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
+          );
+        }
+
+        if (action === "PLAY" && yt.playVideo) yt.playVideo();
+        if (action === "PAUSE" && yt.pauseVideo) yt.pauseVideo();
+        if (action === "SEEK" && yt.seekTo) yt.seekTo(currentTime, true);
+      }
+    };
+
+    return () => socket.close();
   }, []);
+
+  // --- Emit Sync Message (Admin Only) ---
+  const emitPlaybackUpdate = (action, currentTime = null) => {
+    if (
+      !isAdmin ||
+      !socketRef.current ||
+      socketRef.current.readyState !== WebSocket.OPEN
+    )
+      return;
+
+    console.log(`[SENDING - ADMIN] Action: ${action}, Time: ${currentTime}`);
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: "PLAYBACK_UPDATE",
+        roomCode,
+        action,
+        currentTime,
+      })
+    );
+  };
+
+  // --- Player Events ---
+  const onPlayerReady = (event) => {
+    playerRef.current = event.target;
+    setIsPlayerReady(true);
+    useEffect(() => {
+  if (isAdmin && isPlayerReady && playerRef.current?.internalPlayer) {
+    playerRef.current.internalPlayer
+      .getCurrentTime()
+      .then((currentTime) => {
+        console.log("[ADMIN] Sending forced sync on ready");
+        emitPlaybackUpdate("SEEK", currentTime);
+      });
+  }
+}, [isPlayerReady]);
+
+    if (!isAdmin) {
+      event.target.pauseVideo(); // wait for sync
+    }
+  };
+
+  const onStateChange = (event) => {
+    const yt = event.target;
+    if (!isAdmin || debounceRef.current) return;
+
+    const playerState = yt.getPlayerState();
+    const currentTime = yt.getCurrentTime();
+
+    if (playerState === 1) emitPlaybackUpdate("PLAY", currentTime); // playing
+    if (playerState === 2) emitPlaybackUpdate("PAUSE", currentTime); // paused
+
+    // Debounce to prevent flood
+    debounceRef.current = true;
+    setTimeout(() => (debounceRef.current = false), 500);
+  };
+
+  const handleSeek = async () => {
+    if (!playerRef.current) return;
+    const currentTime = await playerRef.current.internalPlayer.getCurrentTime();
+    emitPlaybackUpdate("SEEK", currentTime);
+  };
 
   const handleVideoEnd = async () => {
     if (!currentSong) return;
@@ -102,6 +207,11 @@ export default function QueuePlayer({roomAdminId}) {
     }
   };
 
+  useEffect(() => {
+    getCurrentSong();
+    getQueue();
+  }, []);
+
   const playerOptions = {
     width: "100%",
     height: "400",
@@ -124,7 +234,10 @@ export default function QueuePlayer({roomAdminId}) {
               key={currentSong.id}
               videoId={extractVideoId(currentSong.youtube_url)}
               opts={playerOptions}
+              onReady={onPlayerReady}
               onEnd={handleVideoEnd}
+              onStateChange={onStateChange}
+              onPlaybackRateChange={handleSeek}
             />
             <div className="mt-2 text-green-200">
               <h3 className="text-lg font-semibold">{currentSong.title}</h3>
@@ -138,7 +251,7 @@ export default function QueuePlayer({roomAdminId}) {
         )}
       </div>
 
-      {/* Mini Queue */}
+      {/* Queue */}
       <div>
         <h3 className="text-lg font-bold text-green-400 mb-3">Queue</h3>
         <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
@@ -149,12 +262,9 @@ export default function QueuePlayer({roomAdminId}) {
                 className="group p-4 rounded-lg py-6 bg-zinc-800 border border-green-700 hover:border-green-500 transition-all"
               >
                 <div className="mb-2 flex items-start gap-2">
-                  {/* Queue Number */}
                   <div className="min-w-[24px] h-[24px] bg-green-600 text-white text-xs rounded-full flex items-center justify-center font-bold mt-1">
                     {index + 1}
                   </div>
-
-                  {/* Song Info */}
                   <div className="flex-1">
                     <h4 className="font-medium text-sm text-white mb-1 line-clamp-2">
                       {song.title}
@@ -166,7 +276,6 @@ export default function QueuePlayer({roomAdminId}) {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-1">
                   <button
                     onClick={() => handlePlayNow(song.id)}
@@ -188,7 +297,9 @@ export default function QueuePlayer({roomAdminId}) {
             <div className="text-center py-8">
               <Clock size={40} className="text-green-600 mx-auto mb-3" />
               <p className="text-green-400 text-sm">Queue is empty</p>
-              <p className="text-green-500 text-xs">Add some songs to get started</p>
+              <p className="text-green-500 text-xs">
+                Add some songs to get started
+              </p>
             </div>
           )}
         </div>
