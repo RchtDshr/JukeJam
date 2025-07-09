@@ -9,6 +9,7 @@ import {
   CURRENT_SONG_CHANGED,
   SONG_QUEUE_UPDATED,
 } from "../graphql/subscriptions";
+import { createSyncWS } from "../websocket/sync"; // Assuming you have this in a separate file
 
 const extractVideoId = (url) => {
   const urlObj = new URL(url);
@@ -23,7 +24,7 @@ export default function QueuePlayer({ roomAdminId }) {
   const [currentSong, setCurrentSong] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
   const playerRef = useRef(null);
-  const socketRef = useRef(null);
+  const syncWSRef = useRef(null);
   const debounceRef = useRef(false);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
 
@@ -68,135 +69,184 @@ export default function QueuePlayer({ roomAdminId }) {
 
   // --- WebSocket Connection ---
   useEffect(() => {
-    const socket = new WebSocket("ws://localhost:3000");
-    socketRef.current = socket;
+    const handleSyncReceived = async (syncData) => {
+      const { action, currentTime } = syncData;
 
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({
-          type: "JOIN_ROOM",
-          roomCode,
-          userId: participantId,
-        })
+      // Only non-admin users should respond to sync messages
+      if (isAdmin) {
+        console.log(
+          `[IGNORED - ADMIN] Action: ${action}, Time: ${currentTime}`
+        );
+        return;
+      }
+
+      if (!playerRef.current || !isPlayerReady) {
+        console.log("[SYNC ERROR] Player not ready");
+        return;
+      }
+
+      const yt = playerRef.current;
+
+      console.log(
+        `[SYNCING - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
       );
+
+      // Temporarily disable state change events to prevent feedback loops
+      debounceRef.current = Date.now();
+
+      try {
+        if (action === "PLAY") {
+          await yt.seekTo(currentTime, true);
+          await yt.playVideo();
+          console.log(`[SYNCED] Video played at ${currentTime}s`);
+        } else if (action === "PAUSE") {
+          await yt.seekTo(currentTime, true);
+          await yt.pauseVideo();
+          console.log(`[SYNCED] Video paused at ${currentTime}s`);
+        } else if (action === "SEEK") {
+          await yt.seekTo(currentTime, true);
+          console.log(`[SYNCED] Video seeked to ${currentTime}s`);
+        }
+      } catch (error) {
+        console.error("[SYNC ERROR]", error);
+      }
+
+      // Re-enable state change events after a short delay
+      setTimeout(() => {
+        debounceRef.current = 0;
+      }, 1000);
     };
 
-    socket.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
+    // Create WebSocket connection
+    syncWSRef.current = createSyncWS(
+      roomCode,
+      participantId,
+      handleSyncReceived
+    );
 
-      if (message.type === "PLAYBACK_UPDATE") {
-        const { action, currentTime } = message.data;
-
-        // Only non-admin users should respond to sync messages
-        if (isAdmin) {
-          console.log(
-            `[IGNORED - ADMIN] Action: ${action}, Time: ${currentTime}`
-          );
-          return;
-        }
-
-        if (!playerRef.current || !playerRef.current.internalPlayer) {
-          console.log("[SYNC ERROR] Player not ready");
-          return;
-        }
-        if (!isPlayerReady) {
-          console.log("[SYNC ERROR] Player not ready");
-          return;
-        }
-
-        const yt = playerRef.current.internalPlayer;
-
-        console.log(
-          `[SYNCING - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
-        );
-
-        // Temporarily disable state change events to prevent feedback loops
-        debounceRef.current = true;
-
-        try {
-          if (action === "PLAY") {
-            await yt.seekTo(currentTime, true);
-            await yt.playVideo();
-            console.log(`[SYNCED] Video played at ${currentTime}s`);
-          } else if (action === "PAUSE") {
-            await yt.seekTo(currentTime, true);
-            await yt.pauseVideo();
-            console.log(`[SYNCED] Video paused at ${currentTime}s`);
-          } else if (action === "SEEK") {
-            await yt.seekTo(currentTime, true);
-            console.log(`[SYNCED] Video seeked to ${currentTime}s`);
-          }
-        } catch (error) {
-          console.error("[SYNC ERROR]", error);
-        }
-
-        // Re-enable state change events after a short delay
-        setTimeout(() => {
-          debounceRef.current = false;
-        }, 1000);
+    return () => {
+      if (syncWSRef.current) {
+        syncWSRef.current.close();
       }
     };
-    return () => socket.close();
-  }, []);
+  }, [roomCode, participantId, isAdmin, isPlayerReady]);
 
-  // --- Emit Sync Message (Admin Only) ---
-  const emitPlaybackUpdate = (action, currentTime = null) => {
-    if (
-      !isAdmin ||
-      !socketRef.current ||
-      socketRef.current.readyState !== WebSocket.OPEN
-    )
-      return;
-
-    console.log(`[SENDING - ADMIN] Action: ${action}, Time: ${currentTime}`);
-
-    socketRef.current.send(
-      JSON.stringify({
-        type: "PLAYBACK_UPDATE",
-        roomCode,
-        action,
-        currentTime,
-      })
-    );
-  };
+  // --- Send initial sync when admin player is ready ---
   useEffect(() => {
-    if (isAdmin && isPlayerReady && playerRef.current?.internalPlayer) {
-      playerRef.current.internalPlayer.getCurrentTime().then((currentTime) => {
-        console.log("[ADMIN] Sending forced sync on ready");
-        emitPlaybackUpdate("SEEK", currentTime);
-      });
+    if (isAdmin && isPlayerReady && playerRef.current && syncWSRef.current) {
+      // Wait a bit for the player to be fully ready
+      setTimeout(async () => {
+        try {
+          const currentTime = await playerRef.current.getCurrentTime();
+          const playerState = playerRef.current.getPlayerState();
+
+          console.log("[ADMIN] Sending initial sync on ready", {
+            currentTime,
+            playerState,
+          });
+
+          // Send the appropriate action based on current state
+          if (playerState === 1) {
+            // Playing
+            syncWSRef.current.sendSync("PLAY", currentTime);
+          } else if (playerState === 2) {
+            // Paused
+            syncWSRef.current.sendSync("PAUSE", currentTime);
+          } else {
+            syncWSRef.current.sendSync("SEEK", currentTime);
+          }
+        } catch (error) {
+          console.error("[ADMIN] Error sending initial sync:", error);
+        }
+      }, 500);
     }
-  }, [isPlayerReady]);
+  }, [isAdmin, isPlayerReady, currentSong]);
 
   // --- Player Events ---
   const onPlayerReady = (event) => {
+    console.log("[PLAYER] Ready event fired");
     playerRef.current = event.target;
     setIsPlayerReady(true);
 
     if (!isAdmin) {
-      event.target.pauseVideo(); // wait for sync
+      console.log("[NON-ADMIN] Pausing video to wait for sync");
+      event.target.pauseVideo();
     }
   };
 
   const onStateChange = async (event) => {
     const yt = event.target;
-    if (!isAdmin || debounceRef.current) return;
+
+    console.log(
+      "[STATE CHANGE] Player state:",
+      yt.getPlayerState(),
+      "IsAdmin:",
+      isAdmin,
+      "Debounced:",
+      debounceRef.current
+    );
+
+    if (!isAdmin || !syncWSRef.current) {
+      return;
+    }
 
     const playerState = yt.getPlayerState();
-    const currentTime = await yt.getCurrentTime(); // Make this async
 
-    if (playerState === 1) emitPlaybackUpdate("PLAY", currentTime); // playing
-    if (playerState === 2) emitPlaybackUpdate("PAUSE", currentTime); // paused
+    // Skip buffering states (3) and unstarted (-1)
+    if (playerState === 3 || playerState === -1) {
+      return;
+    }
 
-    // Debounce to prevent flood
-    debounceRef.current = true;
-    setTimeout(() => (debounceRef.current = false), 500);
+    try {
+      const currentTime = await yt.getCurrentTime();
+      console.log(
+        "[ADMIN] State change - State:",
+        playerState,
+        "Time:",
+        currentTime
+      );
+
+      // Use a state-specific debounce approach
+      const now = Date.now();
+      const lastSyncTime = debounceRef.current || 0;
+      const timeSinceLastSync = now - lastSyncTime;
+
+      // Only debounce if less than 200ms since last sync
+      if (timeSinceLastSync < 200) {
+        console.log(
+          "[ADMIN] Skipping due to recent sync (",
+          timeSinceLastSync,
+          "ms ago)"
+        );
+        return;
+      }
+
+      if (playerState === 1) {
+        // Playing
+        console.log("[ADMIN] Sending PLAY sync");
+        syncWSRef.current.sendSync("PLAY", currentTime);
+        debounceRef.current = now;
+      } else if (playerState === 2) {
+        // Paused
+        console.log("[ADMIN] Sending PAUSE sync");
+        syncWSRef.current.sendSync("PAUSE", currentTime);
+        debounceRef.current = now;
+      }
+    } catch (error) {
+      console.error("[ADMIN] Error in state change:", error);
+    }
   };
 
   const handleSeek = async () => {
-    if (!playerRef.current) return;
-    const currentTime = await playerRef.current.internalPlayer.getCurrentTime();
-    emitPlaybackUpdate("SEEK", currentTime);
+    if (!isAdmin || !playerRef.current || !syncWSRef.current) return;
+
+    try {
+      const currentTime = await playerRef.current.getCurrentTime();
+      console.log("[ADMIN] Manual seek to:", currentTime);
+      syncWSRef.current.sendSync("SEEK", currentTime);
+    } catch (error) {
+      console.error("[ADMIN] Error in seek:", error);
+    }
   };
 
   const handleVideoEnd = async () => {
@@ -247,15 +297,29 @@ export default function QueuePlayer({ roomAdminId }) {
     width: "100%",
     height: "400",
     playerVars: {
-      autoplay: 1,
+      autoplay: isAdmin ? 1 : 0, // Only autoplay for admin
       rel: 0,
       modestbranding: 1,
       controls: isAdmin ? 1 : 0,
+      enablejsapi: 1, // Important for API access
     },
   };
 
   return (
     <div className="space-y-8">
+      {/* Debug info */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-gray-800 p-2 text-xs text-gray-300">
+          <div>IsAdmin: {isAdmin ? "Yes" : "No"}</div>
+          <div>PlayerReady: {isPlayerReady ? "Yes" : "No"}</div>
+          <div>
+            WebSocket:{" "}
+            {syncWSRef.current?.isConnected() ? "Connected" : "Disconnected"}
+          </div>
+          <div>CurrentSong: {currentSong?.title || "None"}</div>
+        </div>
+      )}
+
       {/* Now Playing */}
       <div>
         <h2 className="text-xl font-bold mb-4 text-green-400">Now Playing</h2>
