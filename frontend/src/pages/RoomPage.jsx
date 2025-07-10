@@ -2,17 +2,14 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast, Toaster } from "react-hot-toast";
-import {
-  Music,
-  LogOut,
-  Home,
-} from "lucide-react";
+import { Music, LogOut, Home } from "lucide-react";
 
 import { GET_ROOM } from "../graphql/queries";
 import { LEAVE_ROOM } from "../graphql/mutations";
 import QueuePlayer from "../components/QueuePlayer";
 import SidePanel from "./SidePanel";
-import { createSyncWS } from "../websocket/sync"; // ✅ Add this
+import { createSyncWS } from "../websocket/sync"; //
+import { useRoomStore } from "../store/useRoomStore";
 
 export default function RoomPage() {
   const { roomCode } = useParams();
@@ -24,54 +21,46 @@ export default function RoomPage() {
   });
 
   const [leaveRoom] = useMutation(LEAVE_ROOM);
-  const [participants, setParticipants] = useState([]);
-  const syncRef = useRef(null); // ✅ For WebSocket instance
-
-  // ✅ Handler for incoming sync (to be passed down)
+  const {
+    initializeRoom,
+    clearRoom,
+    participants,
+    setParticipants,
+    setSyncWS,
+    syncWS,
+  } = useRoomStore();
+  // Handler for incoming sync
   const handleSyncReceived = ({ action, currentTime }) => {
-    // Let QueuePlayer use this via props
-    if (syncRef.current?.onSyncHandler) {
-      syncRef.current.onSyncHandler(action, currentTime);
+    // Let QueuePlayer handle this via the store
+    if (syncWS?.onSyncHandler) {
+      syncWS.onSyncHandler(action, currentTime);
     }
   };
 
-  // ✅ Create WebSocket sync on mount
-  useEffect(() => {
-    if (roomCode && participantId) {
-      syncRef.current = createSyncWS(roomCode, participantId, handleSyncReceived);
-    }
-    return () => {
-      syncRef.current?.close();
-    };
-  }, [roomCode, participantId]);
-
-  useEffect(() => {
-    if (data?.getRoom?.members) {
-      // console.log("🔵 Room members from GET_ROOM:", data.getRoom.members);
-      // console.log("🔍 Current user in room members:", data.getRoom.members.some(m => m.id === participantId));
-      setParticipants(data.getRoom.members);
-    }
-  }, [data, participantId]);
-
-  // Refetch room data after a short delay to ensure we're included
+  // Initialize room data when loaded
   useEffect(() => {
     if (data?.getRoom && participantId) {
-      const currentUserInRoom = data.getRoom.members.some(m => m.id === participantId);
-      if (!currentUserInRoom) {
-        // console.log("⚠️ Current user not in room members, refetching...");
-        // Refetch after a short delay to allow backend to process
-        setTimeout(() => {
-          refetch();
-        }, 1000);
-      }
+      initializeRoom(data.getRoom, participantId);
     }
-  }, [data, participantId, refetch]);
+  }, [data, participantId, initializeRoom]);
+
+  // Create WebSocket sync on mount
+  useEffect(() => {
+    if (roomCode && participantId) {
+      const ws = createSyncWS(roomCode, participantId, handleSyncReceived);
+      setSyncWS(ws);
+      return () => {
+        ws?.close();
+      };
+    }
+  }, [roomCode, participantId, setSyncWS]);
 
   const handleLeave = async () => {
     try {
       await leaveRoom({ variables: { roomCode, participantId } });
       localStorage.removeItem("participantId");
       localStorage.removeItem("roomCode");
+      clearRoom(); // Clear store state
       toast.success("Left room");
       navigate("/", { state: { refreshRooms: true } });
     } catch (err) {
@@ -142,7 +131,7 @@ export default function RoomPage() {
           <div className="lg:col-span-3">
             <QueuePlayer
               roomAdminId={room.admin_id.id}
-              sync={syncRef.current} // ✅ Pass sync object
+              // Remove sync prop - QueuePlayer will get it from store
             />
           </div>
 

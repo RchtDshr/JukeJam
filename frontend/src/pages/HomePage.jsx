@@ -7,7 +7,6 @@ import RoomList from "../components/RoomList";
 import CreateRoomModal from "../components/CreateRoomModal";
 import { Toaster, toast } from "react-hot-toast";
 import { FaMusic } from "react-icons/fa";
-import Test from "../components/Test";
 
 export default function HomePage() {
   const { loading, error, data, refetch } = useQuery(GET_ROOMS);

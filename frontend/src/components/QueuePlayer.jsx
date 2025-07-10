@@ -10,6 +10,7 @@ import {
   SONG_QUEUE_UPDATED,
 } from "../graphql/subscriptions";
 import { createSyncWS } from "../websocket/sync";
+import { useRoomStore } from "../store/useRoomStore";
 
 const extractVideoId = (url) => {
   const urlObj = new URL(url);
@@ -17,24 +18,49 @@ const extractVideoId = (url) => {
 };
 
 export default function QueuePlayer({ roomAdminId }) {
-  const roomCode = localStorage.getItem("roomCode");
-  const participantId = localStorage.getItem("participantId");
-  const isAdmin = participantId === roomAdminId;
-
-  const [currentSong, setCurrentSong] = useState(null);
-  const [songQueue, setSongQueue] = useState([]);
   const playerRef = useRef(null);
   const syncWSRef = useRef(null);
   const debounceRef = useRef(0);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
   const syncIntervalRef = useRef(null);
   const pendingSyncRef = useRef(null);
+  const isAdminRef = useRef(false); // Add ref to track admin status
+
+  // Get state from Zustand store
+  const {
+    currentSong,
+    setCurrentSong,
+    songQueue,
+    setSongQueue,
+    isPlayerReady,
+    setIsPlayerReady,
+    syncWS,
+    setSyncWS,
+    roomCode,
+    participantId,
+    getIsAdmin,
+  } = useRoomStore();
+
+  // Get isAdmin status and update ref
+  const isAdmin = getIsAdmin();
+  isAdminRef.current = isAdmin; // Keep ref in sync
+
+  console.log('[DEBUG] Current state:', {
+    roomCode,
+    participantId,
+    isAdmin,
+    roomAdminId,
+    currentSong: currentSong?.title,
+    queueLength: songQueue?.length,
+    isPlayerReady,
+    syncWSConnected: syncWS?.isConnected?.()
+  });
 
   const [getCurrentSong] = useLazyQuery(GET_CURRENT_SONG, {
     variables: { roomCode },
     fetchPolicy: "network-only",
     onCompleted: (data) => {
       if (data?.getCurrentSong) {
+        console.log('[GraphQL] Current song updated:', data.getCurrentSong.title);
         setCurrentSong(data.getCurrentSong);
       }
     },
@@ -45,6 +71,7 @@ export default function QueuePlayer({ roomAdminId }) {
     fetchPolicy: "network-only",
     onCompleted: (data) => {
       if (data?.getSongQueue) {
+        console.log('[GraphQL] Queue updated:', data.getSongQueue.length, 'songs');
         setSongQueue(data.getSongQueue);
       }
     },
@@ -58,8 +85,9 @@ export default function QueuePlayer({ roomAdminId }) {
     onData: ({ data }) => {
       const song = data.data?.currentSongChanged;
       if (song) {
+        console.log('[SUBSCRIPTION] Current song changed:', song.title);
         setCurrentSong(song);
-        setIsPlayerReady(false); // Reset player ready state for new video
+        setIsPlayerReady(false);
       }
     },
   });
@@ -68,39 +96,42 @@ export default function QueuePlayer({ roomAdminId }) {
     variables: { roomCode },
     onData: ({ data }) => {
       const updatedQueue = data.data?.songQueueUpdated;
-      if (updatedQueue) setSongQueue(updatedQueue);
+      if (updatedQueue) {
+        console.log('[SUBSCRIPTION] Queue updated:', updatedQueue.length, 'songs');
+        setSongQueue(updatedQueue);
+      }
     },
   });
 
-  // --- WebSocket Connection ---
-  useEffect(() => {
-    const handleSyncReceived = async (syncData) => {
-      const { action, currentTime } = syncData;
+  // Stable sync handler that uses the ref for admin status
+  const handleSyncReceived = useRef((syncData) => {
+    const { action, currentTime, timestamp } = syncData;
+    const currentIsAdmin = isAdminRef.current; // Use ref value
+    
+    console.log('[SYNC RECEIVED] Data:', { action, currentTime, timestamp, isAdmin: currentIsAdmin });
 
-      // Only non-admin users should respond to sync messages
-      if (isAdmin) {
-        console.log(
-          `[IGNORED - ADMIN] Action: ${action}, Time: ${currentTime}`
-        );
-        return;
-      }
+    // CRITICAL: Admin should NEVER process sync messages
+    if (currentIsAdmin) {
+      console.log(`[IGNORED - ADMIN] Action: ${action}, Time: ${currentTime}`);
+      return;
+    }
 
-      if (!playerRef.current || !isPlayerReady) {
-        console.log("[SYNC ERROR] Player not ready, storing pending sync");
-        // Store pending sync for when player is ready
-        pendingSyncRef.current = syncData;
-        return;
-      }
+    if (!playerRef.current || !isPlayerReady) {
+      console.log("[SYNC ERROR] Player not ready, storing pending sync", {
+        hasPlayer: !!playerRef.current,
+        isPlayerReady
+      });
+      pendingSyncRef.current = syncData;
+      return;
+    }
 
-      const yt = playerRef.current;
+    const yt = playerRef.current;
+    console.log(`[SYNCING - NON-ADMIN] Action: ${action}, Time: ${currentTime}`);
 
-      console.log(
-        `[SYNCING - NON-ADMIN] Action: ${action}, Time: ${currentTime}`
-      );
+    debounceRef.current = Date.now();
 
-      // Temporarily disable state change events to prevent feedback loops
-      debounceRef.current = Date.now();
-
+    // Execute sync actions
+    (async () => {
       try {
         if (action === "PLAY") {
           await yt.seekTo(currentTime, true);
@@ -118,29 +149,60 @@ export default function QueuePlayer({ roomAdminId }) {
         console.error("[SYNC ERROR]", error);
       }
 
-      // Re-enable state change events after a short delay
       setTimeout(() => {
         debounceRef.current = 0;
       }, 1000);
-    };
+    })();
+  });
 
-    // Create WebSocket connection
-    syncWSRef.current = createSyncWS(roomCode, participantId, handleSyncReceived);
+  // WebSocket sync handling
+  useEffect(() => {
+    console.log('[WEBSOCKET EFFECT] Running with:', { 
+      roomCode, 
+      participantId, 
+      isAdmin, 
+      isPlayerReady,
+      hasSyncWS: !!syncWS 
+    });
+
+    // Initialize WebSocket if not already connected
+    if (!syncWS && roomCode && participantId) {
+      console.log('[WEBSOCKET] Initializing sync WebSocket');
+      const ws = createSyncWS(roomCode, participantId, handleSyncReceived.current);
+      setSyncWS(ws);
+    } else if (syncWS && roomCode && participantId) {
+      console.log('[WEBSOCKET] WebSocket already exists, updating callback');
+      if (syncWS.updateCallback) {
+        syncWS.updateCallback(handleSyncReceived.current);
+      }
+    }
 
     return () => {
-      if (syncWSRef.current) {
-        syncWSRef.current.close();
-      }
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
       }
     };
-  }, [roomCode, participantId, isAdmin, isPlayerReady]);
+  }, [roomCode, participantId, syncWS, setSyncWS]);
 
-  // --- Send periodic sync for admin to keep everyone in sync ---
+  // Admin periodic sync
   useEffect(() => {
-    if (isAdmin && isPlayerReady && playerRef.current && syncWSRef.current) {
-      // Send periodic sync every 2 seconds to keep everyone in sync
+    console.log('[ADMIN SYNC] Effect triggered:', {
+      isAdmin,
+      isPlayerReady,
+      hasPlayer: !!playerRef.current,
+      hasSyncWS: !!syncWS,
+      currentSong: currentSong?.title
+    });
+
+    if (isAdmin && isPlayerReady && playerRef.current && syncWS && currentSong) {
+      console.log('[ADMIN SYNC] Starting periodic sync...');
+      
+      // Clear any existing interval
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+      
+      // Send periodic sync every 2 seconds
       syncIntervalRef.current = setInterval(async () => {
         try {
           const currentTime = await playerRef.current.getCurrentTime();
@@ -149,14 +211,14 @@ export default function QueuePlayer({ roomAdminId }) {
           // Only send sync if video is playing
           if (playerState === 1) {
             console.log("[ADMIN] Periodic sync - Playing at", currentTime);
-            syncWSRef.current.sendSync("PLAY", currentTime);
+            syncWS.sendSync("PLAY", currentTime);
           }
         } catch (error) {
           console.error("[ADMIN] Error in periodic sync:", error);
         }
       }, 2000);
       
-      // Send initial sync
+      // Send initial sync after a delay
       setTimeout(async () => {
         try {
           const currentTime = await playerRef.current.getCurrentTime();
@@ -165,11 +227,11 @@ export default function QueuePlayer({ roomAdminId }) {
           console.log("[ADMIN] Sending initial sync on ready", { currentTime, playerState });
           
           if (playerState === 1) {
-            syncWSRef.current.sendSync("PLAY", currentTime);
+            syncWS.sendSync("PLAY", currentTime);
           } else if (playerState === 2) {
-            syncWSRef.current.sendSync("PAUSE", currentTime);
+            syncWS.sendSync("PAUSE", currentTime);
           } else {
-            syncWSRef.current.sendSync("SEEK", currentTime);
+            syncWS.sendSync("SEEK", currentTime);
           }
         } catch (error) {
           console.error("[ADMIN] Error sending initial sync:", error);
@@ -180,13 +242,14 @@ export default function QueuePlayer({ roomAdminId }) {
     return () => {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
       }
     };
-  }, [isAdmin, isPlayerReady, currentSong]);
+  }, [isAdmin, isPlayerReady, currentSong, syncWS]);
 
-  // --- Player Events ---
+  // Player Events
   const onPlayerReady = async (event) => {
-    console.log("[PLAYER] Ready event fired");
+    console.log("[PLAYER] Ready event fired", { isAdmin });
     playerRef.current = event.target;
     setIsPlayerReady(true);
 
@@ -220,17 +283,18 @@ export default function QueuePlayer({ roomAdminId }) {
 
   const onStateChange = async (event) => {
     const yt = event.target;
+    const playerState = yt.getPlayerState();
     
-    console.log("[STATE CHANGE] Player state:", yt.getPlayerState(), "IsAdmin:", isAdmin, "Debounced:", debounceRef.current);
+    console.log("[STATE CHANGE] Player state:", playerState, "IsAdmin:", isAdmin, "Debounced:", debounceRef.current);
     
-    if (!isAdmin || !syncWSRef.current) {
+    if (!isAdmin || !syncWS) {
+      console.log("[STATE CHANGE] Skipping - not admin or no syncWS");
       return;
     }
 
-    const playerState = yt.getPlayerState();
-    
     // Skip buffering states (3) and unstarted (-1)
     if (playerState === 3 || playerState === -1) {
+      console.log("[STATE CHANGE] Skipping buffering/unstarted state");
       return;
     }
     
@@ -238,7 +302,6 @@ export default function QueuePlayer({ roomAdminId }) {
       const currentTime = await yt.getCurrentTime();
       console.log("[ADMIN] State change - State:", playerState, "Time:", currentTime);
 
-      // Use a state-specific debounce approach
       const now = Date.now();
       const lastSyncTime = debounceRef.current || 0;
       const timeSinceLastSync = now - lastSyncTime;
@@ -251,12 +314,12 @@ export default function QueuePlayer({ roomAdminId }) {
 
       if (playerState === 1) { // Playing
         console.log("[ADMIN] Sending PLAY sync");
-        syncWSRef.current.sendSync("PLAY", currentTime);
+        syncWS.sendSync("PLAY", currentTime);
         debounceRef.current = now;
         
       } else if (playerState === 2) { // Paused
         console.log("[ADMIN] Sending PAUSE sync");
-        syncWSRef.current.sendSync("PAUSE", currentTime);
+        syncWS.sendSync("PAUSE", currentTime);
         debounceRef.current = now;
       }
     } catch (error) {
@@ -265,12 +328,12 @@ export default function QueuePlayer({ roomAdminId }) {
   };
 
   const handleSeek = async () => {
-    if (!isAdmin || !playerRef.current || !syncWSRef.current) return;
+    if (!isAdmin || !playerRef.current || !syncWS) return;
     
     try {
       const currentTime = await playerRef.current.getCurrentTime();
       console.log("[ADMIN] Manual seek to:", currentTime);
-      syncWSRef.current.sendSync("SEEK", currentTime);
+      syncWS.sendSync("SEEK", currentTime);
     } catch (error) {
       console.error("[ADMIN] Error in seek:", error);
     }
@@ -316,26 +379,32 @@ export default function QueuePlayer({ roomAdminId }) {
   };
 
   useEffect(() => {
-    getCurrentSong();
-    getQueue();
-  }, []);
+    if (roomCode) {
+      console.log('[EFFECT] Fetching current song and queue');
+      getCurrentSong();
+      getQueue();
+    }
+  }, [roomCode]);
 
   const playerOptions = {
     width: "100%",
     height: "400",
     playerVars: {
-      autoplay: isAdmin ? 1 : 0, // Only autoplay for admin
+      autoplay: isAdmin ? 1 : 0,
       rel: 0,
       modestbranding: 1,
       controls: isAdmin ? 1 : 0,
-      enablejsapi: 1, // Important for API access
+      enablejsapi: 1,
     },
   };
+
+  if (!roomCode) {
+    return <div className="text-green-400">Loading room...</div>;
+  }
 
   return (
     <div className="space-y-8">
      
-      {/* Now Playing */}
       <div>
         <h2 className="text-xl font-bold mb-4 text-green-400">Now Playing</h2>
         {currentSong ? (

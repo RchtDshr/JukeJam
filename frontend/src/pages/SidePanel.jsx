@@ -2,16 +2,15 @@ import { useState } from "react";
 import { Clock, Users } from "lucide-react";
 import SearchSongsTab from "./SearchSongsTab";
 import ParticipantsTab from "./ParticipantsTab";
+import { useRoomStore } from "../store/useRoomStore";
 
-export default function SidePanel({ 
-  roomCode, 
-  participantId, 
-  participants, 
-  setParticipants, 
-  roomAdminId, 
-  initialParticipants 
+export default function SidePanel({
+  roomCode,
+  participantId,
+  roomAdminId,
+  initialParticipants,
 }) {
-  const [activeTab, setActiveTab] = useState("participants");
+  const { activeTab, setActiveTab, participants } = useRoomStore();
 
   return (
     <div className="bg-zinc-900 border border-green-800 rounded-xl overflow-hidden">
@@ -43,17 +42,13 @@ export default function SidePanel({
 
       {/* Tab Content */}
       <div className="p-6">
-        {activeTab === "queue" && (
-          <SearchSongsTab roomCode={roomCode} />
-        )}
+        {activeTab === "queue" && <SearchSongsTab roomCode={roomCode} />}
 
         {activeTab === "participants" && (
           <ParticipantsTab
             roomCode={roomCode}
             participantId={participantId}
             initialParticipants={initialParticipants}
-            participants={participants}
-            setParticipants={setParticipants}
             roomAdminId={roomAdminId}
           />
         )}
