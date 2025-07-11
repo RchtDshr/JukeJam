@@ -23,7 +23,8 @@ export default function QueuePlayer({ roomAdminId }) {
   const debounceRef = useRef(0);
   const syncIntervalRef = useRef(null);
   const pendingSyncRef = useRef(null);
-  const isAdminRef = useRef(false); // Add ref to track admin status
+  const isAdminRef = useRef(false);
+  const playerReadyRef = useRef(false); // Add ref to track ready state
 
   // Get state from Zustand store
   const {
@@ -42,7 +43,7 @@ export default function QueuePlayer({ roomAdminId }) {
 
   // Get isAdmin status and update ref
   const isAdmin = getIsAdmin();
-  isAdminRef.current = isAdmin; // Keep ref in sync
+  isAdminRef.current = isAdmin;
 
   console.log('[DEBUG] Current state:', {
     roomCode,
@@ -88,6 +89,7 @@ export default function QueuePlayer({ roomAdminId }) {
         console.log('[SUBSCRIPTION] Current song changed:', song.title);
         setCurrentSong(song);
         setIsPlayerReady(false);
+        playerReadyRef.current = false; // Reset ready state
       }
     },
   });
@@ -103,10 +105,54 @@ export default function QueuePlayer({ roomAdminId }) {
     },
   });
 
+  // Apply pending sync helper function
+  const applyPendingSync = useRef(async (player, syncData) => {
+    if (!syncData || !player) return;
+    
+    console.log('[APPLYING PENDING SYNC]', syncData);
+    const { action, currentTime } = syncData;
+    
+    try {
+      if (action === "PLAY") {
+        console.log(`[PENDING SYNC] Seeking to ${currentTime}s and playing`);
+        player.seekTo(currentTime, true);
+        
+        setTimeout(async () => {
+          try {
+            await player.playVideo();
+            console.log(`[PENDING SYNC] Video played at ${currentTime}s`);
+          } catch (error) {
+            console.error('[PENDING SYNC] Error playing:', error);
+          }
+        }, 500);
+        
+      } else if (action === "PAUSE") {
+        console.log(`[PENDING SYNC] Seeking to ${currentTime}s and pausing`);
+        player.seekTo(currentTime, true);
+        
+        setTimeout(async () => {
+          try {
+            await player.pauseVideo();
+            console.log(`[PENDING SYNC] Video paused at ${currentTime}s`);
+          } catch (error) {
+            console.error('[PENDING SYNC] Error pausing:', error);
+          }
+        }, 500);
+        
+      } else if (action === "SEEK") {
+        console.log(`[PENDING SYNC] Seeking to ${currentTime}s`);
+        player.seekTo(currentTime, true);
+        console.log(`[PENDING SYNC] Video seeked to ${currentTime}s`);
+      }
+    } catch (error) {
+      console.error('[PENDING SYNC ERROR]', error);
+    }
+  });
+
   // Stable sync handler that uses the ref for admin status
   const handleSyncReceived = useRef((syncData) => {
     const { action, currentTime, timestamp } = syncData;
-    const currentIsAdmin = isAdminRef.current; // Use ref value
+    const currentIsAdmin = isAdminRef.current;
     
     console.log('[SYNC RECEIVED] Data:', { action, currentTime, timestamp, isAdmin: currentIsAdmin });
 
@@ -116,10 +162,14 @@ export default function QueuePlayer({ roomAdminId }) {
       return;
     }
 
-    if (!playerRef.current || !isPlayerReady) {
+    // Check if player is ready using both state and ref
+    const playerReady = playerReadyRef.current && playerRef.current;
+    
+    if (!playerReady) {
       console.log("[SYNC ERROR] Player not ready, storing pending sync", {
         hasPlayer: !!playerRef.current,
-        isPlayerReady
+        isPlayerReady: playerReadyRef.current,
+        storeIsPlayerReady: isPlayerReady
       });
       pendingSyncRef.current = syncData;
       return;
@@ -130,20 +180,74 @@ export default function QueuePlayer({ roomAdminId }) {
 
     debounceRef.current = Date.now();
 
-    // Execute sync actions
+    // Execute sync actions with improved error handling
     (async () => {
       try {
+        // Get current player state to handle buffering issues
+        const playerState = yt.getPlayerState();
+        console.log(`[SYNC] Current player state: ${playerState}`);
+
         if (action === "PLAY") {
-          await yt.seekTo(currentTime, true);
-          await yt.playVideo();
-          console.log(`[SYNCED] Video played at ${currentTime}s`);
+          console.log(`[SYNC] Seeking to ${currentTime}s and playing`);
+          
+          // For play actions, ensure video is loaded at the seek position
+          yt.seekTo(currentTime, true);
+          
+          // Wait a bit for seek to complete before playing
+          setTimeout(async () => {
+            try {
+              await yt.playVideo();
+              console.log(`[SYNCED] Video played at ${currentTime}s`);
+              
+              // Verify we're actually at the right position after a short delay
+              setTimeout(async () => {
+                try {
+                  const actualTime = await yt.getCurrentTime();
+                  const timeDiff = Math.abs(actualTime - currentTime);
+                  
+                  if (timeDiff > 2) { // If more than 2 seconds off
+                    console.log(`[SYNC CORRECTION] Time diff: ${timeDiff}s, re-seeking`);
+                    yt.seekTo(currentTime, true);
+                  }
+                } catch (error) {
+                  console.error("[SYNC] Error checking time position:", error);
+                }
+              }, 1000);
+              
+            } catch (error) {
+              console.error("[SYNC] Error playing video:", error);
+            }
+          }, 300);
+          
         } else if (action === "PAUSE") {
-          await yt.seekTo(currentTime, true);
-          await yt.pauseVideo();
-          console.log(`[SYNCED] Video paused at ${currentTime}s`);
+          console.log(`[SYNC] Seeking to ${currentTime}s and pausing`);
+          yt.seekTo(currentTime, true);
+          
+          setTimeout(async () => {
+            try {
+              await yt.pauseVideo();
+              console.log(`[SYNCED] Video paused at ${currentTime}s`);
+            } catch (error) {
+              console.error("[SYNC] Error pausing video:", error);
+            }
+          }, 300);
+          
         } else if (action === "SEEK") {
-          await yt.seekTo(currentTime, true);
-          console.log(`[SYNCED] Video seeked to ${currentTime}s`);
+          console.log(`[SYNC] Seeking to ${currentTime}s`);
+          yt.seekTo(currentTime, true);
+          
+          // For seek, maintain current play state
+          setTimeout(async () => {
+            try {
+              const currentState = yt.getPlayerState();
+              if (currentState === 1) { // If was playing, continue playing
+                await yt.playVideo();
+              }
+              console.log(`[SYNCED] Video seeked to ${currentTime}s`);
+            } catch (error) {
+              console.error("[SYNC] Error after seek:", error);
+            }
+          }, 300);
         }
       } catch (error) {
         console.error("[SYNC ERROR]", error);
@@ -251,32 +355,22 @@ export default function QueuePlayer({ roomAdminId }) {
   const onPlayerReady = async (event) => {
     console.log("[PLAYER] Ready event fired", { isAdmin });
     playerRef.current = event.target;
+    
+    // Set ready state in both store and ref
     setIsPlayerReady(true);
+    playerReadyRef.current = true;
 
     if (!isAdmin) {
       console.log("[NON-ADMIN] Pausing video to wait for sync");
       event.target.pauseVideo();
       
-      // Apply pending sync if any
+      // Apply pending sync if any - with a longer delay to ensure player is truly ready
       if (pendingSyncRef.current) {
         console.log("[NON-ADMIN] Applying pending sync:", pendingSyncRef.current);
         setTimeout(async () => {
-          const { action, currentTime } = pendingSyncRef.current;
-          try {
-            if (action === "PLAY") {
-              await event.target.seekTo(currentTime, true);
-              await event.target.playVideo();
-            } else if (action === "PAUSE") {
-              await event.target.seekTo(currentTime, true);
-              await event.target.pauseVideo();
-            } else if (action === "SEEK") {
-              await event.target.seekTo(currentTime, true);
-            }
-            pendingSyncRef.current = null;
-          } catch (error) {
-            console.error("[NON-ADMIN] Error applying pending sync:", error);
-          }
-        }, 500);
+          await applyPendingSync.current(event.target, pendingSyncRef.current);
+          pendingSyncRef.current = null;
+        }, 1000); // Increased delay
       }
     }
   };
@@ -306,8 +400,8 @@ export default function QueuePlayer({ roomAdminId }) {
       const lastSyncTime = debounceRef.current || 0;
       const timeSinceLastSync = now - lastSyncTime;
       
-      // Only debounce if less than 200ms since last sync
-      if (timeSinceLastSync < 200) {
+      // Only debounce if less than 300ms since last sync (increased from 200ms)
+      if (timeSinceLastSync < 300) {
         console.log("[ADMIN] Skipping due to recent sync (", timeSinceLastSync, "ms ago)");
         return;
       }
