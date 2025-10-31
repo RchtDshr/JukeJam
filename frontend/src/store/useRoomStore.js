@@ -91,6 +91,10 @@ export const useRoomStore = create(
     
     getSortedParticipants: () => {
       const state = get();
+      // Check if participants exists and is an array
+      if (!state.participants || !Array.isArray(state.participants)) {
+        return [];
+      }
       return [...state.participants].sort((a, b) => {
         // Admin first
         if (state.currentRoom?.admin_id?.id && a.id === state.currentRoom.admin_id.id) return -1;

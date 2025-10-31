@@ -26,6 +26,11 @@ export default function Participants({
     getSortedParticipants,
   } = useRoomStore();
 
+  // Early return if no roomCode (user left the room)
+  if (!roomCode) {
+    return null;
+  }
+
   const sortedParticipants = getSortedParticipants();
 
   // Initialize participants on mount

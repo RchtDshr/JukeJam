@@ -15,6 +15,7 @@ export default function RoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const participantId = localStorage.getItem("participantId");
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const { loading, error, data, refetch } = useQuery(GET_ROOM, {
     variables: { roomCode },
@@ -57,6 +58,7 @@ export default function RoomPage() {
 
   const handleLeave = async () => {
     try {
+      setIsLeaving(true);
       await leaveRoom({ variables: { roomCode, participantId } });
       localStorage.removeItem("participantId");
       localStorage.removeItem("roomCode");
@@ -64,11 +66,12 @@ export default function RoomPage() {
       toast.success("Left room");
       navigate("/", { state: { refreshRooms: true } });
     } catch (err) {
+      setIsLeaving(false);
       toast.error("Error leaving room");
     }
   };
 
-  if (loading) {
+  if (loading || isLeaving) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white">
         <Music className="animate-spin text-green-400" size={40} />
