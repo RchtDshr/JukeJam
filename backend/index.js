@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { URL } = require('url');
 const { ApolloServer } = require('apollo-server-express');
 const { makeExecutableSchema } = require('@graphql-tools/schema');
@@ -26,6 +28,28 @@ const redisSub = new Redis(process.env.REDIS_URL || {
 // --- Build GraphQL Schema ---
 const schema = makeExecutableSchema({ typeDefs, resolvers });
 const app = express();
+
+// --- CORS Configuration for Production ---
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'http://localhost:5173',
+    process.env.FRONTEND_URL, // Will be set to your Render frontend URL
+  ].filter(Boolean);
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 const httpServer = http.createServer(app);
 
 // --- WebSocket Server for GraphQL Subscriptions ---
@@ -40,6 +64,13 @@ const server = new ApolloServer({
   schema,
   context: () => ({ pubsub }),
   introspection: true,
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      process.env.FRONTEND_URL
+    ].filter(Boolean),
+    credentials: true
+  },
   plugins: [{
     async serverWillStart() {
       return {
@@ -164,6 +195,35 @@ redisSub.on('message', (channel, message) => {
   }
 });
 
+// --- Database Initialization ---
+async function initializeDatabase() {
+  try {
+    console.log('🔄 Checking database tables...');
+    
+    // Check if tables exist
+    const tableCheck = await pg.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'participants'
+    `);
+    
+    if (tableCheck.rows.length === 0) {
+      console.log('📋 Tables not found. Initializing database schema...');
+      const fs = require('fs');
+      const path = require('path');
+      const initSQL = fs.readFileSync(path.join(__dirname, 'db', 'init.sql'), 'utf8');
+      
+      await pg.query(initSQL);
+      console.log('✅ Database schema initialized successfully!');
+    } else {
+      console.log('✅ Database tables already exist');
+    }
+  } catch (error) {
+    console.error('❌ Database initialization error:', error.message);
+    // Don't crash the app, just log the error
+  }
+}
+
 // --- Start Everything ---
 (async () => {
   await server.start();
@@ -173,6 +233,9 @@ redisSub.on('message', (channel, message) => {
   httpServer.listen(PORT, async () => {
     console.log(`🚀 GraphQL: http://localhost:${PORT}${server.graphqlPath}`);
     console.log(`🚀 Subscriptions: ws://localhost:${PORT}/graphql`);
+
+    // Initialize database schema if needed
+    await initializeDatabase();
 
     // Redis + Postgres test
     await redis.set('project', 'collab-music');
