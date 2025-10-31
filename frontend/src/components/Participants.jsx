@@ -3,13 +3,7 @@ import { useSubscription } from "@apollo/client";
 import { toast } from "react-hot-toast";
 import {
   Users,
-  UserCheck,
   Crown,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  MoreVertical,
 } from "lucide-react";
 import {
   PARTICIPANT_JOINED,
@@ -36,36 +30,65 @@ export default function Participants({
 
   // Initialize participants on mount
   useEffect(() => {
+    console.log('Initializing participants:', { initialParticipants, participantId });
     if (initialParticipants) {
       setParticipants(initialParticipants);
     }
-  }, [initialParticipants, setParticipants, participantId]);
+  }, [initialParticipants, setParticipants]);
 
-  // Add effect to ensure current user is always in the list
+  // Debug effect to log current state
   useEffect(() => {
-    // If we have a participantId but current user is not in the participants list,
-    // we need to add them (this handles the case where backend doesn't include current user)
+    console.log('Current participants state:', {
+      participants,
+      participantId,
+      sortedParticipants,
+      currentUserExists: participants.some(p => p.id === participantId)
+    });
+  }, [participants, participantId, sortedParticipants]);
+
+  // Ensure current user is always in the participants list
+  useEffect(() => {
     if (participantId && participants.length > 0) {
       const currentUserExists = participants.some(
         (p) => p.id === participantId
       );
+      
+      // If current user is not in the list, add them
+      if (!currentUserExists) {
+        // Try to find current user in initialParticipants
+        const currentUserFromInitial = initialParticipants?.find(
+          (p) => p.id === participantId
+        );
+        
+        if (currentUserFromInitial) {
+          addParticipant(currentUserFromInitial);
+        } else {
+          // If not found in initial, create a basic entry
+          // This is a fallback - ideally the backend should include current user
+          console.warn("Current user not found in participants list");
+        }
+      }
     }
-  }, [participants, participantId]);
+  }, [participants, participantId, initialParticipants, addParticipant]);
 
   // New participant joined
   useSubscription(PARTICIPANT_JOINED, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
+      console.log('PARTICIPANT_JOINED received:', subscriptionData.data);
       const newParticipant = subscriptionData.data?.participantJoined;
       if (newParticipant) {
-        // Update participants state - this was missing!
-        setParticipants((prev) => {
-          // Check if participant already exists to avoid duplicates
-          const exists = prev.some((p) => p.id === newParticipant.id);
+        // Use setParticipants to ensure proper update
+        setParticipants(prev => {
+          // Check if participant already exists
+          const exists = prev.some(p => p.id === newParticipant.id);
           if (!exists) {
+            console.log('Adding new participant:', newParticipant);
             return [...prev, newParticipant];
+          } else {
+            console.log('Participant already exists, updating:', newParticipant);
+            return prev.map(p => p.id === newParticipant.id ? newParticipant : p);
           }
-          return prev;
         });
 
         // Only show toast for other participants, not yourself
@@ -81,38 +104,21 @@ export default function Participants({
         }
       }
     },
-  });
-
-  // Participant left
-  useSubscription(PARTICIPANT_LEFT, {
-    variables: { roomCode },
-    onSubscriptionData: ({ subscriptionData }) => {
-      const newParticipant = subscriptionData.data?.participantJoined;
-      if (newParticipant) {
-        addParticipant(newParticipant);
-
-        if (newParticipant.id !== participantId) {
-          toast.success(`${newParticipant.name} joined!`, {
-            icon: "👋",
-            style: {
-              background: "#065f46",
-              color: "#ffffff",
-              border: "1px solid #10b981",
-            },
-          });
-        }
-      }
+    onError: (error) => {
+      console.error('PARTICIPANT_JOINED subscription error:', error);
     },
   });
 
-  // Participant list updated
-  useSubscription(PARTICIPANTS_UPDATED, {
+  // Participant left - FIXED: Handle participantLeft data correctly
+  useSubscription(PARTICIPANT_LEFT, {
     variables: { roomCode },
     onSubscriptionData: ({ subscriptionData }) => {
+      console.log('PARTICIPANT_LEFT received:', subscriptionData.data);
       const leftParticipant = subscriptionData.data?.participantLeft;
       if (leftParticipant) {
-        removeParticipant(leftParticipant.id);
+        setParticipants(prev => prev.filter(p => p.id !== leftParticipant.id));
 
+        // Only show toast for other participants, not yourself
         if (leftParticipant.id !== participantId) {
           toast.success(`${leftParticipant.name} left the room.`, {
             icon: "👋",
@@ -124,6 +130,25 @@ export default function Participants({
           });
         }
       }
+    },
+    onError: (error) => {
+      console.error('PARTICIPANT_LEFT subscription error:', error);
+    },
+  });
+
+  // Participant list updated - FIXED: Handle updated participants list
+  useSubscription(PARTICIPANTS_UPDATED, {
+    variables: { roomCode },
+    onSubscriptionData: ({ subscriptionData }) => {
+      console.log('PARTICIPANTS_UPDATED received:', subscriptionData.data);
+      const updatedParticipants = subscriptionData.data?.participantsUpdated;
+      if (updatedParticipants) {
+        console.log('Updating participants with:', updatedParticipants);
+        setParticipants(updatedParticipants);
+      }
+    },
+    onError: (error) => {
+      console.error('PARTICIPANTS_UPDATED subscription error:', error);
     },
   });
 
@@ -159,6 +184,18 @@ export default function Participants({
             </div>
             <h3 className="text-lg font-bold text-white">Participants</h3>
           </div>
+          {/* Debug button - remove this in production */}
+          <button 
+            onClick={() => {
+              console.log('Force refresh participants');
+              if (initialParticipants) {
+                setParticipants(initialParticipants);
+              }
+            }}
+            className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 

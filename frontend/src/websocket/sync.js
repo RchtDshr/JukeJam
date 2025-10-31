@@ -7,7 +7,7 @@ export function createSyncWS(roomCode, userId, onSyncReceived) {
   const maxReconnectAttempts = 5;
   let currentCallback = onSyncReceived; // Store the current callback
 
-  const wsUrl = 'ws://localhost:3000';
+  const wsUrl = import.meta.env.VITE_SYNC_WS_URL || 'ws://localhost:3000';
 
   function connect() {
     console.log('=== WebSocket Connection Attempt ===');

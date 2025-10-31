@@ -5,12 +5,12 @@ import { getMainDefinition } from '@apollo/client/utilities';
 
 // HTTP connection to the API
 const httpLink = new HttpLink({
-  uri: 'http://localhost:4000/graphql',
+  uri: import.meta.env.VITE_GRAPHQL_URL || 'http://localhost:4000/graphql',
 });
 
 // WebSocket link for subscriptions with connection params and error handling
 const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:4000/graphql',
+  url: import.meta.env.VITE_GRAPHQL_WS_URL || 'ws://localhost:4000/graphql',
   connectionParams: {
     // Add any auth headers if needed
   },
