@@ -19,12 +19,15 @@ export default function Participants({
   roomAdminId = null,
 }) {
   const {
-    participants,
+    participants: storeParticipants,
     setParticipants,
     addParticipant,
     removeParticipant,
     getSortedParticipants,
   } = useRoomStore();
+
+  // Ensure participants is always an array
+  const participants = Array.isArray(storeParticipants) ? storeParticipants : [];
 
   // Early return if no roomCode (user left the room)
   if (!roomCode) {
@@ -43,18 +46,23 @@ export default function Participants({
 
   // Debug effect to log current state
   useEffect(() => {
+    // Ensure participants is always an array
+    const participantsArray = Array.isArray(participants) ? participants : [];
     console.log('Current participants state:', {
-      participants,
+      participants: participantsArray,
       participantId,
       sortedParticipants,
-      currentUserExists: participants.some(p => p.id === participantId)
+      currentUserExists: participantsArray.some(p => p.id === participantId)
     });
   }, [participants, participantId, sortedParticipants]);
 
   // Ensure current user is always in the participants list
   useEffect(() => {
-    if (participantId && participants.length > 0) {
-      const currentUserExists = participants.some(
+    // Ensure participants is always an array
+    const participantsArray = Array.isArray(participants) ? participants : [];
+    
+    if (participantId && participantsArray.length > 0) {
+      const currentUserExists = participantsArray.some(
         (p) => p.id === participantId
       );
       

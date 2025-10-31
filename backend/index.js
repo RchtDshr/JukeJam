@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const { URL } = require('url');
 const { ApolloServer } = require('apollo-server-express');
 const { makeExecutableSchema } = require('@graphql-tools/schema');
 const { WebSocketServer, WebSocket } = require('ws');
@@ -29,10 +30,10 @@ const httpServer = http.createServer(app);
 
 // --- WebSocket Server for GraphQL Subscriptions ---
 const graphqlWsServer = new WebSocketServer({
-  server: httpServer,
-  path: '/graphql',
+  noServer: true
 });
-useServer({ schema, context: () => ({ pubsub }) }, graphqlWsServer);
+
+const graphqlWsServerCleanup = useServer({ schema, context: () => ({ pubsub }) }, graphqlWsServer);
 
 // --- Apollo Server Setup ---
 const server = new ApolloServer({
@@ -43,15 +44,45 @@ const server = new ApolloServer({
     async serverWillStart() {
       return {
         async drainServer() {
-          await graphqlWsServer.close();
+          graphqlWsServerCleanup.dispose();
         },
       };
     },
   }],
 });
+
 // --- Additional WebSocket Server for Sync (raw WS) ---
-const syncWSS = new WebSocketServer({ port: 3000 }); // Could optionally use the same port with path routing
-console.log('🎵 Sync Server running on ws://localhost:3000');
+const syncWSS = new WebSocketServer({ 
+  noServer: true
+});
+console.log('🎵 Sync WebSocket server created');
+
+// Handle WebSocket upgrade manually for both paths
+httpServer.on('upgrade', (request, socket, head) => {
+  try {
+    const pathname = new URL(request.url, 'http://localhost').pathname;
+    
+    console.log('🔄 WebSocket upgrade request for:', pathname);
+    
+    if (pathname === '/graphql') {
+      graphqlWsServer.handleUpgrade(request, socket, head, (ws) => {
+        graphqlWsServer.emit('connection', ws, request);
+        console.log('✅ GraphQL WebSocket connection established');
+      });
+    } else if (pathname === '/sync') {
+      syncWSS.handleUpgrade(request, socket, head, (ws) => {
+        syncWSS.emit('connection', ws, request);
+        console.log('✅ Sync WebSocket connection established');
+      });
+    } else {
+      console.log('⚠️ Unknown WebSocket path:', pathname);
+      socket.destroy();
+    }
+  } catch (error) {
+    console.error('❌ WebSocket upgrade error:', error);
+    socket.destroy();
+  }
+});
 
 // Map to track connected sync clients and their metadata
 const syncClients = new Map(); // socket -> { roomCode, userId }
