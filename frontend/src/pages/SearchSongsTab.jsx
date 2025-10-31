@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { Search, X } from "lucide-react";
-import YouTubeSearch from "../components/YouTubeSearch";
+import YouTubeSearch from "../components/YoutubeSearch";
 
 export default function SearchSongsTab({ roomCode }) {
   const [showSearch, setShowSearch] = useState(false);
